@@ -6,3 +6,192 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/*
+ * Task Progress Bar Styles
+ */
+
+.task-progress-container {
+  padding: 10px;
+  margin-top: 10px;
+  transition: opacity 0.2s ease;
+}
+
+.task-progress-container.updating {
+  opacity: 0.7;
+}
+
+.task-progress-container .progress-bar {
+  width: 100%;
+  height: 10px;
+  background-color: var(--background-secondary);
+  border-radius: 5px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+
+.task-progress-container .progress-bar .progress {
+  height: 100%;
+  background-color: var(--interactive-accent);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.task-progress-container .progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.task-progress-container pre {
+  font-size: 0.8em;
+  padding: 8px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+/* Ensure dataview elements display properly in the sidebar */
+.task-progress-container .dataview-result-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.task-progress-container .dataview-result-table {
+  width: 100%;
+  font-size: 0.85em;
+}
+
+/* Style for the progress percentage text */
+.task-progress-container .progress-percentage {
+  font-weight: bold;
+  color: var(--text-normal);
+  text-align: center;
+  margin-bottom: 5px;
+  font-size: 1.2em;
+}
+
+/* Style for source info */
+.task-progress-container .source-info {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-style: italic;
+}
+
+/* Style for update info */
+.task-progress-container .update-info {
+  font-size: 0.7em;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 5px;
+}
+
+.task-progress-container .update-time {
+  font-style: italic;
+}
+
+/* Animation for updates */
+@keyframes highlight {
+  0% { background-color: transparent; }
+  30% { background-color: var(--background-modifier-success); }
+  100% { background-color: transparent; }
+}
+
+.task-progress-container.updated .progress-bar {
+  animation: highlight 1.5s ease;
+}
+
+/* Styles for task list in sidebar */
+.task-progress-container ul.task-list {
+  padding-left: 15px;
+  margin: 5px 0;
+  max-height: 150px;
+  overflow-y: auto;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.task-progress-container ul.task-list li {
+  font-size: 0.85em;
+  margin-bottom: 3px;
+  list-style-type: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Styles for Dataview status in settings */
+.dataview-status {
+  margin: 15px 0;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: var(--background-secondary);
+}
+
+.dataview-status .dataview-available {
+  color: var(--text-success);
+  font-weight: bold;
+}
+
+.dataview-status .dataview-unavailable {
+  color: var(--text-error);
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.dataview-status button {
+  margin-top: 5px;
+}
+
+/* Styles for Dataview warning in sidebar */
+.dataview-warning {
+  margin-top: 15px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: var(--background-modifier-error-rgb);
+  background-color: rgba(var(--background-modifier-error-rgb), 0.1);
+  border-left: 3px solid var(--text-error);
+  font-size: 0.8em;
+}
+
+.dataview-warning p {
+  margin: 0 0 8px 0;
+  color: var(--text-muted);
+}
+
+.dataview-warning button {
+  font-size: 0.9em;
+  padding: 2px 8px;
+}
+
+/* Styles for debug info */
+.debug-info {
+  margin-top: 15px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--text-accent);
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.debug-info p {
+  margin: 0 0 4px 0;
+  font-family: var(--font-monospace);
+}
+
+/* Responsive design for small screens */
+@media (max-width: 600px) {
+  .task-progress-container .progress-stats {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .task-progress-container .progress-stats span:first-child {
+    margin-bottom: 5px;
+  }
+}

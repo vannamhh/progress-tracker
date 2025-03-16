@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "progress-tracker",
+	"name": "ProgressTracker",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Track task completion with a visual progress bar in your sidebar",
+	"author": "VN",
+	"authorUrl": "https://wpmasterynow.com",
+	"fundingUrl": "https://wpmasterynow.com",
 	"isDesktopOnly": false
 }
