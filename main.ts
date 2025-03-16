@@ -44,17 +44,33 @@ function getDataviewAPI(app: App): DataviewApi | null {
 interface TaskProgressBarSettings {
 	mySetting: string;
 	showDebugInfo: boolean;
+	progressColorScheme: 'default' | 'red-orange-green' | 'custom';
+	lowProgressColor: string;
+	mediumProgressColor: string;
+	highProgressColor: string;
+	completeProgressColor: string;
+	lowProgressThreshold: number;
+	mediumProgressThreshold: number;
+	highProgressThreshold: number;
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	mySetting: 'default',
-	showDebugInfo: false
+	showDebugInfo: false,
+	progressColorScheme: 'default',
+	lowProgressColor: '#e06c75', // Red
+	mediumProgressColor: '#e5c07b', // Orange/Yellow
+	highProgressColor: '#61afef', // Blue
+	completeProgressColor: '#98c379', // Green
+	lowProgressThreshold: 33,
+	mediumProgressThreshold: 66,
+	highProgressThreshold: 99
 }
 
 export default class TaskProgressBarPlugin extends Plugin {
 	settings: TaskProgressBarSettings;
 	dvAPI: DataviewApi | null = null;
-	private sidebarView: TaskProgressBarView | null = null;
+	sidebarView: TaskProgressBarView | null = null;
 	private lastActiveFile: TFile | null = null;
 	private lastFileContent: string = '';
 	private dataviewCheckInterval: number | null = null;
@@ -99,8 +115,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 					// Lấy nội dung hiện tại của editor
 					const content = editor.getValue();
 					
-					// Kiểm tra xem nội dung có chứa task hay không
-					if (content.includes('- [') || content.includes('- [ ]') || content.includes('- [x]')) {
+					// Kiểm tra nếu nội dung thay đổi và có chứa task hoặc nội dung cũ có chứa task
+					if (content.includes('- [') || content.includes('- [ ]') || content.includes('- [x]') ||
+					this.lastFileContent.includes('- [') || this.lastFileContent.includes('- [ ]') || this.lastFileContent.includes('- [x]')) {
 						// Cập nhật ngay lập tức
 						if (this.lastActiveFile) {
 							// Cập nhật nội dung file cuối cùng trước khi kiểm tra thay đổi
@@ -114,7 +131,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						}
 					}
 				}
-			}, 200)) // Giảm debounce xuống 200ms để phản ứng nhanh hơn
+			}, 500)) // Giảm debounce xuống 200ms để phản ứng nhanh hơn
 		);
 
 		// Lắng nghe sự kiện keydown để phát hiện khi người dùng nhập task mới hoặc check/uncheck task
@@ -311,9 +328,8 @@ class TaskProgressBarView extends ItemView {
 		this.isVisible = true;
 		const container = this.containerEl.children[1];
 		container.empty();
-		container.createEl('h4', { text: 'Task Progress' });
 		
-		// Create progress container
+		// Create progress container (removed the h4 title)
 		const progressContainer = container.createDiv({ cls: 'task-progress-container' });
 		
 		// Update with current file if available
@@ -376,42 +392,12 @@ class TaskProgressBarView extends ItemView {
 		// Get Dataview API
 		const dvAPI = this.plugin.dvAPI;
 		if (!dvAPI) {
-			// Vẫn hiển thị thanh tiến trình ngay cả khi không có Dataview API
-			try {
-				// Tạo thanh tiến trình trực tiếp từ nội dung
-				this.createProgressBarFromString(progressContainer, content, file);
-				
-				// Thêm thông tin về thời gian cập nhật
-				const updateInfo = progressContainer.createDiv({ cls: 'update-info' });
-				updateInfo.createSpan({ 
-					text: `Last updated: ${new Date().toLocaleTimeString()}`,
-					cls: 'update-time'
-				});
-				
-				// Thêm thông báo về Dataview không khả dụng
-				const dataviewWarning = progressContainer.createDiv({ cls: 'dataview-warning' });
-				dataviewWarning.createEl('p', { 
-					text: 'Note: Dataview plugin is not available. Some advanced features may be limited.' 
-				});
-				
-				// Thêm nút để kiểm tra lại Dataview
-				const checkButton = dataviewWarning.createEl('button', { 
-					text: 'Check for Dataview',
-					cls: 'mod-cta'
-				});
-				checkButton.addEventListener('click', () => {
-					this.plugin.checkDataviewAPI();
-					if (this.plugin.dvAPI) {
-						new Notice('Dataview API found!');
-						this.updateProgressBar(file);
-					} else {
-						new Notice('Dataview API not found. Make sure Dataview plugin is installed and enabled.');
-					}
-				});
-			} catch (error) {
-				console.error('Error creating progress bar without Dataview:', error);
-				progressContainer.createEl('p', { text: 'Error creating progress bar' });
-			}
+			// Thêm thông báo nhỏ gọn về Dataview không khả dụng
+			const dataviewWarning = progressContainer.createDiv({ cls: 'dataview-warning-compact' });
+			dataviewWarning.createEl('span', { 
+				text: 'Dataview not available', 
+				cls: 'dataview-warning-text'
+			});
 			
 			return;
 		}
@@ -419,13 +405,6 @@ class TaskProgressBarView extends ItemView {
 		try {
 			// Tạo thanh tiến trình trực tiếp từ nội dung
 			this.createProgressBarFromString(progressContainer, content, file);
-			
-			// Thêm thông tin về thời gian cập nhật
-			const updateInfo = progressContainer.createDiv({ cls: 'update-info' });
-			updateInfo.createSpan({ 
-				text: `Last updated: ${new Date().toLocaleTimeString()}`,
-				cls: 'update-time'
-			});
 		} catch (error) {
 			console.error('Error updating progress bar:', error);
 			progressContainer.createEl('p', { text: 'Error loading progress bar' });
@@ -447,36 +426,34 @@ class TaskProgressBarView extends ItemView {
 			
 			const percentage = Math.round((completedTasks / totalTasks) * 100);
 			
-			// Create percentage text
-			container.createEl('div', { 
-				text: `${percentage}% Complete`, 
-				cls: 'progress-percentage' 
+			// Create a more compact layout
+			const progressLayout = container.createDiv({ cls: 'progress-layout' });
+			
+			// Create percentage text with smaller size
+			progressLayout.createEl('div', { 
+				text: `${percentage}%`, 
+				cls: 'progress-percentage-small' 
 			});
 			
-			// Create progress bar
-			const progressBarContainer = container.createDiv({ cls: 'progress-bar' });
-			const progressElement = progressBarContainer.createDiv({ cls: 'progress' });
-			progressElement.style.width = `${percentage}%`;
+			// Create HTML5-like progress bar
+			const progressBarContainer = progressLayout.createDiv({ cls: 'pt-progress-bar-container' });
 			
-			// Create stats
-			const statsContainer = container.createDiv({ cls: 'progress-stats' });
-			statsContainer.createSpan({ text: `${completedTasks}/${totalTasks} tasks complete` });
-			statsContainer.createSpan({ text: `${totalTasks - completedTasks} remaining` });
+			// Create the outer progress element (similar to HTML <progress>)
+			const progressElement = progressBarContainer.createDiv({ cls: 'progress-element' });
 			
-			// Hiển thị danh sách các task chưa hoàn thành
-			if (totalTasks - completedTasks > 0) {
-				const taskList = container.createEl('ul', { cls: 'task-list' });
-				
-				// Tìm tất cả các task chưa hoàn thành
-				const lines = content.split('\n');
-				for (const line of lines) {
-					if (line.includes('- [ ]')) {
-						// Lấy nội dung task (bỏ qua "- [ ]")
-						const taskContent = line.substring(line.indexOf('- [ ]') + 5).trim();
-						taskList.createEl('li', { text: taskContent });
-					}
-				}
-			}
+			// Create the inner value element that shows the filled portion
+			const progressValue = progressElement.createDiv({ cls: 'progress-value' });
+			progressValue.style.width = `${percentage}%`;
+			
+			// Apply color based on settings
+			this.applyProgressColor(progressValue, percentage);
+			
+			// Add a data attribute for potential CSS styling based on percentage
+			progressElement.setAttribute('data-percentage', percentage.toString());
+			
+			// Create stats (keep this but make it more compact)
+			const statsContainer = container.createDiv({ cls: 'progress-stats-compact' });
+			statsContainer.createSpan({ text: `${completedTasks}/${totalTasks} tasks` });
 			
 			// Thêm debug info nếu cần
 			if (this.plugin.settings.showDebugInfo) {
@@ -488,6 +465,7 @@ class TaskProgressBarView extends ItemView {
 				debugInfo.createEl('p', { text: `Total tasks: ${totalTasks}` });
 				debugInfo.createEl('p', { text: `Percentage: ${percentage}%` });
 				debugInfo.createEl('p', { text: `Update time: ${new Date().toISOString()}` });
+				debugInfo.createEl('p', { text: `Color scheme: ${this.plugin.settings.progressColorScheme}` });
 			}
 		} catch (error) {
 			console.error('Error creating progress bar from string:', error);
@@ -497,6 +475,43 @@ class TaskProgressBarView extends ItemView {
 
 	async onClose() {
 		this.isVisible = false;
+	}
+	
+	// Method to apply color based on percentage and settings
+	applyProgressColor(progressElement: HTMLElement, percentage: number) {
+		const settings = this.plugin.settings;
+		
+		// If using default color scheme, let CSS handle it
+		if (settings.progressColorScheme === 'default') {
+			// Xóa bất kỳ màu inline nào đã được đặt trước đó
+			progressElement.style.backgroundColor = '';
+			return;
+		}
+		
+		// Apply custom color based on percentage
+		if (percentage === 100) {
+			// Hoàn thành - màu xanh lá
+			progressElement.style.backgroundColor = settings.completeProgressColor;
+		} else if (percentage >= settings.mediumProgressThreshold) {
+			// Tiến độ cao (66-99%) - màu xanh dương
+			progressElement.style.backgroundColor = settings.highProgressColor;
+		} else if (percentage >= settings.lowProgressThreshold) {
+			// Tiến độ trung bình (34-65%) - màu cam/vàng
+			progressElement.style.backgroundColor = settings.mediumProgressColor;
+		} else {
+			// Tiến độ thấp (0-33%) - màu đỏ
+			progressElement.style.backgroundColor = settings.lowProgressColor;
+		}
+		
+		// Thêm debug log nếu cần
+		if (this.plugin.settings.showDebugInfo) {
+			console.log(`Applied color for ${percentage}%: 
+				Color scheme: ${settings.progressColorScheme},
+				Low threshold: ${settings.lowProgressThreshold}%, 
+				Medium threshold: ${settings.mediumProgressThreshold}%, 
+				High threshold: ${settings.highProgressThreshold}%,
+				Applied color: ${progressElement.style.backgroundColor}`);
+		}
 	}
 }
 
@@ -571,5 +586,183 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 						this.plugin.checkDataviewAPI();
 					}
 				}));
+				
+		// Add color scheme settings
+		containerEl.createEl('h3', { text: 'Progress Bar Colors' });
+		
+		new Setting(containerEl)
+			.setName('Color Scheme')
+			.setDesc('Choose a color scheme for the progress bar')
+			.addDropdown(dropdown => dropdown
+				.addOption('default', 'Default (Theme Colors)')
+				.addOption('red-orange-green', 'Red-Orange-Blue-Green')
+				.addOption('custom', 'Custom Colors')
+				.setValue(this.plugin.settings.progressColorScheme)
+				.onChange(async (value: 'default' | 'red-orange-green' | 'custom') => {
+					this.plugin.settings.progressColorScheme = value;
+					
+					// Set preset colors if red-orange-green is selected
+					if (value === 'red-orange-green') {
+						// Đặt lại các giá trị màu sắc và ngưỡng
+						this.plugin.settings.lowProgressColor = '#e06c75'; // Red
+						this.plugin.settings.mediumProgressColor = '#e5c07b'; // Orange/Yellow
+						this.plugin.settings.highProgressColor = '#61afef'; // Blue
+						this.plugin.settings.completeProgressColor = '#98c379'; // Green
+						
+						// Đặt lại các ngưỡng
+						this.plugin.settings.lowProgressThreshold = 30;
+						this.plugin.settings.mediumProgressThreshold = 60;
+						this.plugin.settings.highProgressThreshold = 99;
+						
+						// Hiển thị thông báo để xác nhận thay đổi
+						new Notice('Applied Red-Orange-Blue-Green color scheme');
+					}
+					
+					await this.plugin.saveSettings();
+					this.display(); // Refresh to show/hide custom color options
+					
+					// Update the view if open
+					const currentFile = this.app.workspace.getActiveFile();
+					if (currentFile && this.plugin.sidebarView) {
+						this.plugin.sidebarView.updateProgressBar(currentFile);
+					}
+				}));
+				
+		// Only show custom color settings if custom is selected
+		if (this.plugin.settings.progressColorScheme === 'custom') {
+			new Setting(containerEl)
+				.setName('Low Progress Color')
+				.setDesc(`Color for progress below ${this.plugin.settings.lowProgressThreshold}%`)
+				.addText(text => text
+					.setValue(this.plugin.settings.lowProgressColor)
+					.onChange(async (value) => {
+						this.plugin.settings.lowProgressColor = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			new Setting(containerEl)
+				.setName('Medium Progress Color')
+				.setDesc(`Color for progress between ${this.plugin.settings.lowProgressThreshold}% and ${this.plugin.settings.mediumProgressThreshold}%`)
+				.addText(text => text
+					.setValue(this.plugin.settings.mediumProgressColor)
+					.onChange(async (value) => {
+						this.plugin.settings.mediumProgressColor = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			new Setting(containerEl)
+				.setName('High Progress Color')
+				.setDesc(`Color for progress between ${this.plugin.settings.mediumProgressThreshold}% and ${this.plugin.settings.highProgressThreshold}%`)
+				.addText(text => text
+					.setValue(this.plugin.settings.highProgressColor)
+					.onChange(async (value) => {
+						this.plugin.settings.highProgressColor = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			new Setting(containerEl)
+				.setName('Complete Progress Color')
+				.setDesc('Color for 100% progress')
+				.addText(text => text
+					.setValue(this.plugin.settings.completeProgressColor)
+					.onChange(async (value) => {
+						this.plugin.settings.completeProgressColor = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			// Add threshold settings
+			new Setting(containerEl)
+				.setName('Low Progress Threshold')
+				.setDesc('Percentage below which progress is considered low')
+				.addSlider(slider => slider
+					.setLimits(1, 99, 1)
+					.setValue(this.plugin.settings.lowProgressThreshold)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						// Ensure thresholds don't overlap
+						if (value >= this.plugin.settings.mediumProgressThreshold) {
+							value = this.plugin.settings.mediumProgressThreshold - 1;
+						}
+						this.plugin.settings.lowProgressThreshold = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			new Setting(containerEl)
+				.setName('Medium Progress Threshold')
+				.setDesc('Percentage below which progress is considered medium')
+				.addSlider(slider => slider
+					.setLimits(1, 99, 1)
+					.setValue(this.plugin.settings.mediumProgressThreshold)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						// Ensure thresholds don't overlap
+						if (value <= this.plugin.settings.lowProgressThreshold) {
+							value = this.plugin.settings.lowProgressThreshold + 1;
+						}
+						if (value >= this.plugin.settings.highProgressThreshold) {
+							value = this.plugin.settings.highProgressThreshold - 1;
+						}
+						this.plugin.settings.mediumProgressThreshold = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+					
+			new Setting(containerEl)
+				.setName('High Progress Threshold')
+				.setDesc('Percentage below which progress is considered high (but not complete)')
+				.addSlider(slider => slider
+					.setLimits(1, 99, 1)
+					.setValue(this.plugin.settings.highProgressThreshold)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						// Ensure thresholds don't overlap
+						if (value <= this.plugin.settings.mediumProgressThreshold) {
+							value = this.plugin.settings.mediumProgressThreshold + 1;
+						}
+						this.plugin.settings.highProgressThreshold = value;
+						await this.plugin.saveSettings();
+						
+						// Update the view if open
+						const currentFile = this.app.workspace.getActiveFile();
+						if (currentFile && this.plugin.sidebarView) {
+							this.plugin.sidebarView.updateProgressBar(currentFile);
+						}
+					}));
+		}
 	}
 }

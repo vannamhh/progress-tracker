@@ -11,46 +11,210 @@ If your plugin does not need CSS, delete this file.
  * Task Progress Bar Styles
  */
 
+/* Base container styles */
+.workspace-tabs.mod-top.mod-top-right-space:not(.mod-top-left-space) {
+  max-height: 110px !important;
+  height: 150px !important;
+}
+
+
 .task-progress-container {
   padding: 10px;
-  margin-top: 10px;
+  margin-bottom: 10px;
   transition: opacity 0.2s ease;
 }
 
+/* Layout for progress percentage and bar */
+.progress-layout {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* Smaller percentage display */
+.progress-percentage-small {
+  font-size: 14px;
+  font-weight: bold;
+  min-width: 40px;
+  margin-right: 8px;
+}
+
+/* Container for the progress bar */
+.pt-progress-bar-container {
+  flex-grow: 1;
+}
+
+/* HTML5-like progress element */
+.progress-element {
+  width: 100%;
+  height: 8px;
+  background-color: var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* The filled part of the progress bar */
+.progress-value {
+  height: 100%;
+  background-color: var(--interactive-accent);
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Default theme colors based on progress percentage - for default theme only */
+/* Hoàn thành (100%) */
+.progress-element[data-percentage="100"] .progress-value {
+  background-color: var(--color-blue);
+}
+
+/* Tiến độ cao (66-99%) */
+.progress-element[data-percentage="66"] .progress-value,
+.progress-element[data-percentage="67"] .progress-value,
+.progress-element[data-percentage="68"] .progress-value,
+.progress-element[data-percentage="69"] .progress-value,
+.progress-element[data-percentage="70"] .progress-value,
+.progress-element[data-percentage="71"] .progress-value,
+.progress-element[data-percentage="72"] .progress-value,
+.progress-element[data-percentage="73"] .progress-value,
+.progress-element[data-percentage="74"] .progress-value,
+.progress-element[data-percentage="75"] .progress-value,
+.progress-element[data-percentage="76"] .progress-value,
+.progress-element[data-percentage="77"] .progress-value,
+.progress-element[data-percentage="78"] .progress-value,
+.progress-element[data-percentage="79"] .progress-value,
+.progress-element[data-percentage="80"] .progress-value,
+.progress-element[data-percentage="81"] .progress-value,
+.progress-element[data-percentage="82"] .progress-value,
+.progress-element[data-percentage="83"] .progress-value,
+.progress-element[data-percentage="84"] .progress-value,
+.progress-element[data-percentage="85"] .progress-value,
+.progress-element[data-percentage="86"] .progress-value,
+.progress-element[data-percentage="87"] .progress-value,
+.progress-element[data-percentage="88"] .progress-value,
+.progress-element[data-percentage="89"] .progress-value,
+.progress-element[data-percentage="90"] .progress-value,
+.progress-element[data-percentage="91"] .progress-value,
+.progress-element[data-percentage="92"] .progress-value,
+.progress-element[data-percentage="93"] .progress-value,
+.progress-element[data-percentage="94"] .progress-value,
+.progress-element[data-percentage="95"] .progress-value,
+.progress-element[data-percentage="96"] .progress-value,
+.progress-element[data-percentage="97"] .progress-value,
+.progress-element[data-percentage="98"] .progress-value,
+.progress-element[data-percentage="99"] .progress-value {
+  background-color: var(--color-green);
+}
+
+/* Tiến độ trung bình (34-65%) */
+.progress-element[data-percentage="34"] .progress-value,
+.progress-element[data-percentage="35"] .progress-value,
+.progress-element[data-percentage="36"] .progress-value,
+.progress-element[data-percentage="37"] .progress-value,
+.progress-element[data-percentage="38"] .progress-value,
+.progress-element[data-percentage="39"] .progress-value,
+.progress-element[data-percentage="40"] .progress-value,
+.progress-element[data-percentage="41"] .progress-value,
+.progress-element[data-percentage="42"] .progress-value,
+.progress-element[data-percentage="43"] .progress-value,
+.progress-element[data-percentage="44"] .progress-value,
+.progress-element[data-percentage="45"] .progress-value,
+.progress-element[data-percentage="46"] .progress-value,
+.progress-element[data-percentage="47"] .progress-value,
+.progress-element[data-percentage="48"] .progress-value,
+.progress-element[data-percentage="49"] .progress-value,
+.progress-element[data-percentage="50"] .progress-value,
+.progress-element[data-percentage="51"] .progress-value,
+.progress-element[data-percentage="52"] .progress-value,
+.progress-element[data-percentage="53"] .progress-value,
+.progress-element[data-percentage="54"] .progress-value,
+.progress-element[data-percentage="55"] .progress-value,
+.progress-element[data-percentage="56"] .progress-value,
+.progress-element[data-percentage="57"] .progress-value,
+.progress-element[data-percentage="58"] .progress-value,
+.progress-element[data-percentage="59"] .progress-value,
+.progress-element[data-percentage="60"] .progress-value,
+.progress-element[data-percentage="61"] .progress-value,
+.progress-element[data-percentage="62"] .progress-value,
+.progress-element[data-percentage="63"] .progress-value,
+.progress-element[data-percentage="64"] .progress-value,
+.progress-element[data-percentage="65"] .progress-value {
+  background-color: var(--color-orange);
+}
+
+/* Tiến độ thấp (0-33%) */
+.progress-element[data-percentage="0"] .progress-value,
+.progress-element[data-percentage="1"] .progress-value,
+.progress-element[data-percentage="2"] .progress-value,
+.progress-element[data-percentage="3"] .progress-value,
+.progress-element[data-percentage="4"] .progress-value,
+.progress-element[data-percentage="5"] .progress-value,
+.progress-element[data-percentage="6"] .progress-value,
+.progress-element[data-percentage="7"] .progress-value,
+.progress-element[data-percentage="8"] .progress-value,
+.progress-element[data-percentage="9"] .progress-value,
+.progress-element[data-percentage="10"] .progress-value,
+.progress-element[data-percentage="11"] .progress-value,
+.progress-element[data-percentage="12"] .progress-value,
+.progress-element[data-percentage="13"] .progress-value,
+.progress-element[data-percentage="14"] .progress-value,
+.progress-element[data-percentage="15"] .progress-value,
+.progress-element[data-percentage="16"] .progress-value,
+.progress-element[data-percentage="17"] .progress-value,
+.progress-element[data-percentage="18"] .progress-value,
+.progress-element[data-percentage="19"] .progress-value,
+.progress-element[data-percentage="20"] .progress-value,
+.progress-element[data-percentage="21"] .progress-value,
+.progress-element[data-percentage="22"] .progress-value,
+.progress-element[data-percentage="23"] .progress-value,
+.progress-element[data-percentage="24"] .progress-value,
+.progress-element[data-percentage="25"] .progress-value,
+.progress-element[data-percentage="26"] .progress-value,
+.progress-element[data-percentage="27"] .progress-value,
+.progress-element[data-percentage="28"] .progress-value,
+.progress-element[data-percentage="29"] .progress-value,
+.progress-element[data-percentage="30"] .progress-value,
+.progress-element[data-percentage="31"] .progress-value,
+.progress-element[data-percentage="32"] .progress-value,
+.progress-element[data-percentage="33"] .progress-value {
+  background-color: var(--color-red);
+}
+
+/* Compact stats display */
+.progress-stats-compact {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* Animation for updates */
 .task-progress-container.updating {
   opacity: 0.7;
 }
 
-.task-progress-container .progress-bar {
-  width: 100%;
-  height: 10px;
-  background-color: var(--background-secondary);
-  border-radius: 5px;
-  margin: 10px 0;
-  overflow: hidden;
+.updating {
+  animation: fade-pulse 0.3s ease;
 }
 
-.task-progress-container .progress-bar .progress {
-  height: 100%;
-  background-color: var(--interactive-accent);
-  border-radius: 5px;
-  transition: width 0.3s ease;
+@keyframes fade-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
 }
 
-.task-progress-container .progress-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8em;
-  color: var(--text-muted);
-  margin-bottom: 10px;
-}
-
-.task-progress-container pre {
-  font-size: 0.8em;
+/* Styles for debug info */
+.debug-info {
+  margin-top: 16px;
   padding: 8px;
-  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
-  overflow-x: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.debug-info p {
+  margin: 2px 0;
 }
 
 /* Ensure dataview elements display properly in the sidebar */
@@ -62,66 +226,6 @@ If your plugin does not need CSS, delete this file.
 .task-progress-container .dataview-result-table {
   width: 100%;
   font-size: 0.85em;
-}
-
-/* Style for the progress percentage text */
-.task-progress-container .progress-percentage {
-  font-weight: bold;
-  color: var(--text-normal);
-  text-align: center;
-  margin-bottom: 5px;
-  font-size: 1.2em;
-}
-
-/* Style for source info */
-.task-progress-container .source-info {
-  font-size: 0.75em;
-  color: var(--text-muted);
-  margin-top: 10px;
-  font-style: italic;
-}
-
-/* Style for update info */
-.task-progress-container .update-info {
-  font-size: 0.7em;
-  color: var(--text-muted);
-  text-align: right;
-  margin-top: 10px;
-  border-top: 1px solid var(--background-modifier-border);
-  padding-top: 5px;
-}
-
-.task-progress-container .update-time {
-  font-style: italic;
-}
-
-/* Animation for updates */
-@keyframes highlight {
-  0% { background-color: transparent; }
-  30% { background-color: var(--background-modifier-success); }
-  100% { background-color: transparent; }
-}
-
-.task-progress-container.updated .progress-bar {
-  animation: highlight 1.5s ease;
-}
-
-/* Styles for task list in sidebar */
-.task-progress-container ul.task-list {
-  padding-left: 15px;
-  margin: 5px 0;
-  max-height: 150px;
-  overflow-y: auto;
-  border-left: 2px solid var(--background-modifier-border);
-}
-
-.task-progress-container ul.task-list li {
-  font-size: 0.85em;
-  margin-bottom: 3px;
-  list-style-type: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Styles for Dataview status in settings */
@@ -168,30 +272,80 @@ If your plugin does not need CSS, delete this file.
   padding: 2px 8px;
 }
 
-/* Styles for debug info */
-.debug-info {
-  margin-top: 15px;
-  padding: 8px;
-  border-radius: 4px;
-  background-color: var(--background-secondary);
-  border-left: 3px solid var(--text-accent);
-  font-size: 0.75em;
-  color: var(--text-muted);
-}
-
-.debug-info p {
-  margin: 0 0 4px 0;
-  font-family: var(--font-monospace);
-}
-
 /* Responsive design for small screens */
 @media (max-width: 600px) {
-  .task-progress-container .progress-stats {
+  .progress-layout {
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
   }
   
-  .task-progress-container .progress-stats span:first-child {
-    margin-bottom: 5px;
+  .progress-percentage-small {
+    margin-bottom: 4px;
   }
+}
+
+/* Color scheme settings styles */
+.setting-item.color-setting input[type="text"] {
+  width: 100px;
+}
+
+/* Color preview */
+.color-preview {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  margin-right: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.workspace-leaf-content[data-type="progress-tracker"] .view-content {
+  overflow: hidden;
+}
+
+/* Thông báo Dataview nhỏ gọn */
+.dataview-warning-compact {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 0;
+}
+
+/* Ẩn các phần tử không cần thiết khi chiều cao nhỏ */
+@media (max-height: 300px) {
+  .dataview-warning-compact {
+    display: none;
+  }
+}
+
+
+/* Điều chỉnh chiều cao tối thiểu của sidebar */
+.workspace-leaf-content[data-type="progress-tracker"] {
+  --sidebar-min-height: 67px !important;
+}
+
+/* Ẩn phần header của sidebar để tiết kiệm không gian */
+.workspace-leaf-content[data-type="progress-tracker"] .view-header {
+  display: none;
+}
+
+/* Điều chỉnh padding của container để tiết kiệm không gian */
+.task-progress-container {
+  padding: 8px;
+  margin-bottom: 0;
+}
+
+/* Giảm margin của layout */
+.progress-layout {
+  margin-bottom: 4px;
+}
+
+/* Giảm margin của stats */
+.progress-stats-compact {
+  margin-top: 2px;
+}
+
+/* Ẩn thanh cuộn khi không cần thiết */
+.workspace-leaf-content[data-type="progress-tracker"] .view-content {
+  overflow: hidden;
 }
