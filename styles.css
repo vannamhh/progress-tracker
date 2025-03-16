@@ -12,10 +12,9 @@ If your plugin does not need CSS, delete this file.
  */
 
 /* Base container styles */
-.workspace-tabs.mod-top.mod-top-right-space:not(.mod-top-left-space) {
+/* .workspace-tabs.mod-top.mod-top-right-space:not(.mod-top-left-space) {
   max-height: 110px !important;
-  height: 150px !important;
-}
+} */
 
 
 .task-progress-container {
