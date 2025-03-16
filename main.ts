@@ -52,6 +52,11 @@ interface TaskProgressBarSettings {
 	lowProgressThreshold: number;
 	mediumProgressThreshold: number;
 	highProgressThreshold: number;
+	showUpdateAnimation: boolean; // Add new setting for animation toggle
+	updateAnimationDelay: number; // Add animation delay setting
+	editorChangeDelay: number; // Add editor change delay
+	keyboardInputDelay: number; // Add keyboard input delay
+	checkboxClickDelay: number; // Add checkbox click delay
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
@@ -64,7 +69,12 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	completeProgressColor: '#98c379', // Green
 	lowProgressThreshold: 33,
 	mediumProgressThreshold: 66,
-	highProgressThreshold: 99
+	highProgressThreshold: 99,
+	showUpdateAnimation: true, // Default to true to maintain current behavior
+	updateAnimationDelay: 300, // Default animation delay (300ms)
+	editorChangeDelay: 500, // Default editor change delay (500ms)
+	keyboardInputDelay: 10,  // Default keyboard input delay (10ms)
+	checkboxClickDelay: 50   // Default checkbox click delay (50ms)
 }
 
 export default class TaskProgressBarPlugin extends Plugin {
@@ -131,7 +141,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						}
 					}
 				}
-			}, 500)) // Giảm debounce xuống 200ms để phản ứng nhanh hơn
+				}, this.settings.editorChangeDelay)) // Use configurable delay
 		);
 
 		// Lắng nghe sự kiện keydown để phát hiện khi người dùng nhập task mới hoặc check/uncheck task
@@ -155,7 +165,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 							// Sau đó mới cập nhật nội dung file cuối cùng
 							this.lastFileContent = content;
 						}
-					}, 10); // Giảm thời gian chờ xuống 10ms
+						}, this.settings.keyboardInputDelay); // Use configurable delay
 				}
 			}
 		});
@@ -179,8 +189,8 @@ export default class TaskProgressBarPlugin extends Plugin {
 						
 						// Sau đó mới cập nhật nội dung file cuối cùng
 						this.lastFileContent = content;
-					}
-				}, 50); // Giảm thời gian chờ xuống 50ms
+						}
+					}, this.settings.checkboxClickDelay); // Use configurable delay
 			}
 		});
 
@@ -358,17 +368,21 @@ class TaskProgressBarView extends ItemView {
 		const progressContainer = container.querySelector('.task-progress-container') as HTMLElement;
 		if (!progressContainer) return;
 		
-		// Thêm class để hiển thị animation
-		progressContainer.classList.add('updating');
+		// Thêm class để hiển thị animation chỉ khi cài đặt showUpdateAnimation được bật
+		if (this.plugin.settings.showUpdateAnimation) {
+			progressContainer.classList.add('updating');
+		}
 		
 		// Cập nhật ngay lập tức nếu có nội dung được cung cấp
 		if (content) {
 			this.updateProgressBarContentWithString(content, progressContainer, file);
 			
-			// Xóa class sau khi cập nhật xong
-			setTimeout(() => {
-				progressContainer.classList.remove('updating');
-			}, 300);
+			// Xóa class sau khi cập nhật xong, chỉ khi animation được bật
+			if (this.plugin.settings.showUpdateAnimation) {
+				setTimeout(() => {
+					progressContainer.classList.remove('updating');
+				}, this.plugin.settings.updateAnimationDelay); // Use configurable delay
+			}
 		} else {
 			// Nếu không có nội dung, đọc từ file
 			setTimeout(async () => {
@@ -377,10 +391,12 @@ class TaskProgressBarView extends ItemView {
 				// Cập nhật với nội dung đọc được
 				this.updateProgressBarContentWithString(fileContent, progressContainer, file);
 				
-				// Xóa class sau khi cập nhật xong
-				setTimeout(() => {
-					progressContainer.classList.remove('updating');
-				}, 300);
+				// Xóa class sau khi cập nhật xong, chỉ khi animation được bật
+				if (this.plugin.settings.showUpdateAnimation) {
+					setTimeout(() => {
+						progressContainer.classList.remove('updating');
+					}, this.plugin.settings.updateAnimationDelay); // Use configurable delay
+				}
 			}, 50);
 		}
 	}
@@ -559,6 +575,9 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			});
 		}
 
+		// General settings section
+		containerEl.createEl('h3', { text: 'General Settings' });
+
 		new Setting(containerEl)
 			.setName('Setting')
 			.setDesc('Description of the setting')
@@ -585,6 +604,109 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 						// Sử dụng phương thức public để cập nhật UI
 						this.plugin.checkDataviewAPI();
 					}
+				}));
+
+		// Animation settings section
+		containerEl.createEl('h3', { text: 'Animation Settings' });
+		
+		// Add new setting for animation
+		new Setting(containerEl)
+			.setName('Show Update Animation')
+			.setDesc('Show a brief animation when updating the progress bar')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showUpdateAnimation)
+				.onChange(async (value) => {
+					this.plugin.settings.showUpdateAnimation = value;
+					await this.plugin.saveSettings();
+					
+					// No need to update the view here as it will only affect future updates
+				}));
+		
+		new Setting(containerEl)
+			.setName('Update Animation Delay')
+			.setDesc('Duration of the update animation in milliseconds (higher = longer animation)')
+			.addSlider(slider => slider
+				.setLimits(100, 1000, 50) // From 100ms to 1000ms in steps of 50ms
+				.setValue(this.plugin.settings.updateAnimationDelay)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.updateAnimationDelay = value;
+					await this.plugin.saveSettings();
+					// No need to update the view as this affects future animations
+				}))
+			.addExtraButton(button => button
+				.setIcon('reset')
+				.setTooltip('Reset to default (300ms)')
+				.onClick(async () => {
+					this.plugin.settings.updateAnimationDelay = 300;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings panel to update the slider
+				}));
+
+		// Performance settings section
+		containerEl.createEl('h3', { text: 'Performance Settings' });
+		
+		new Setting(containerEl)
+			.setName('Editor Change Delay')
+			.setDesc('Delay before updating after editor content changes (lower = more responsive, higher = better performance)')
+			.addSlider(slider => slider
+				.setLimits(100, 1000, 50) // From 100ms to 1000ms in steps of 50ms
+				.setValue(this.plugin.settings.editorChangeDelay)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.editorChangeDelay = value;
+					await this.plugin.saveSettings();
+					// Note: This will take effect after plugin reload
+					new Notice("Editor change delay updated. Restart plugin to apply changes.");
+				}))
+			.addExtraButton(button => button
+				.setIcon('reset')
+				.setTooltip('Reset to default (500ms)')
+				.onClick(async () => {
+					this.plugin.settings.editorChangeDelay = 500;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings panel to update the slider
+					new Notice("Editor change delay reset. Restart plugin to apply changes.");
+				}));
+		
+		new Setting(containerEl)
+			.setName('Keyboard Input Delay')
+			.setDesc('Delay after keyboard input before updating progress (in milliseconds)')
+			.addSlider(slider => slider
+				.setLimits(100, 1000, 50) // From 0ms to 100ms in steps of 5ms
+				.setValue(this.plugin.settings.keyboardInputDelay)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.keyboardInputDelay = value;
+					await this.plugin.saveSettings();
+				}))
+			.addExtraButton(button => button
+				.setIcon('reset')
+				.setTooltip('Reset to default (100ms)')
+				.onClick(async () => {
+					this.plugin.settings.keyboardInputDelay = 100;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings panel to update the slider
+				}));
+		
+		new Setting(containerEl)
+			.setName('Checkbox Click Delay')
+			.setDesc('Delay after checkbox click before updating progress (in milliseconds)')
+			.addSlider(slider => slider
+				.setLimits(100, 1000, 50) // From 10ms to 200ms in steps of 10ms
+				.setValue(this.plugin.settings.checkboxClickDelay)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.checkboxClickDelay = value;
+					await this.plugin.saveSettings();
+				}))
+			.addExtraButton(button => button
+				.setIcon('reset')
+				.setTooltip('Reset to default (200ms)')
+				.onClick(async () => {
+					this.plugin.settings.checkboxClickDelay = 200;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings panel to update the slider
 				}));
 				
 		// Add color scheme settings
