@@ -133,20 +133,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 				if (file) {
 					this.lastActiveFile = file;
 
-					// Only update if we haven't updated this file recently
-					// This prevents multiple updates in quick succession
-					const now = Date.now();
-					const lastUpdate =
-						this.sidebarView?.lastFileUpdateMap.get(file.path) || 0;
-					if (now - lastUpdate > 2000) {
-						// Only update if it's been more than 2 seconds since last update for this file
-						setTimeout(async () => {
-							await this.updateLastFileContent(file);
-							if (this.sidebarView) {
-								this.sidebarView.updateProgressBar(file);
-							}
-						}, 300);
-					}
+					 // Always update when file changes to ensure accurate display
+					setTimeout(async () => {
+						await this.updateLastFileContent(file);
+						if (this.sidebarView) {
+							// Pass true to force update even for files without tasks
+							this.sidebarView.updateProgressBar(file);
+						}
+					}, 300);
 				}
 			})
 		);
@@ -536,28 +530,46 @@ class TaskProgressBarView extends ItemView {
 		try {
 			// Cập nhật ngay lập tức nếu có nội dung được cung cấp
 			if (content) {
-				this.updateProgressBarContentWithString(
-					content,
-					progressContainer,
-					file
-				);
+				// Always clear content to avoid showing previous file's progress
+				if (!this.hasTasksInContent(content)) {
+					progressContainer.empty();
+					progressContainer.createEl("p", {
+						text: "No tasks found in this file",
+					});
+				} else {
+					this.updateProgressBarContentWithString(
+						content,
+						progressContainer,
+						file
+					);
+				}
 			} else {
 				// Đọc nội dung file
 				const fileContent = await this.plugin.app.vault.read(file);
 
-				// Do a quick check for tasks to avoid resetting the progress bar unnecessarily
-				if (this.hasTasksInContent(fileContent)) {
+				// Always clear content and show appropriate message if no tasks
+				if (!this.hasTasksInContent(fileContent)) {
+					progressContainer.empty();
+					progressContainer.createEl("p", {
+						text: "No tasks found in this file",
+					});
+					if (this.plugin.settings.showDebugInfo) {
+						console.log("No tasks found in file:", file.path);
+					}
+				} else {
 					this.updateProgressBarContentWithString(
 						fileContent,
 						progressContainer,
 						file
 					);
-				} else if (this.plugin.settings.showDebugInfo) {
-					console.log("No tasks found in file:", file.path);
 				}
 			}
 		} catch (error) {
 			console.error("Error updating progress bar:", error);
+			progressContainer.empty();
+			progressContainer.createEl("p", {
+				text: "Error updating progress bar",
+			});
 		} finally {
 			// Xóa class sau khi cập nhật xong, chỉ khi animation được bật
 			if (this.plugin.settings.showUpdateAnimation) {
@@ -570,7 +582,12 @@ class TaskProgressBarView extends ItemView {
 
 	// Helper method to quickly check if content has tasks
 	hasTasksInContent(content: string): boolean {
-		return /- \[[x ]\]/i.test(content) || /[-*] \[[x ]\]/i.test(content);
+		// Improved and more accurate task detection
+		const standardTaskRegex = /- \[[x ]\]/i;
+		const relaxedTaskRegex = /[-*] \[[x ]\]/i;
+		
+		// Return true if either regex matches
+		return standardTaskRegex.test(content) || relaxedTaskRegex.test(content);
 	}
 
 	// Phương thức mới để cập nhật với nội dung string trực tiếp
@@ -579,22 +596,19 @@ class TaskProgressBarView extends ItemView {
 		progressContainer: HTMLElement,
 		file: TFile
 	) {
-		// Don't empty the container to prevent flashing - we'll replace content as needed
+		 // Always clear the container to prevent showing stale content
+		progressContainer.empty();
 
 		// Get Dataview API
 		const dvAPI = this.plugin.dvAPI;
 		if (!dvAPI) {
-			// Only update warning if it doesn't already exist
-			if (!progressContainer.querySelector(".dataview-warning-compact")) {
-				progressContainer.empty();
-				const dataviewWarning = progressContainer.createDiv({
-					cls: "dataview-warning-compact",
-				});
-				dataviewWarning.createEl("span", {
-					text: "Dataview not available",
-					cls: "dataview-warning-text",
-				});
-			}
+			const dataviewWarning = progressContainer.createDiv({
+				cls: "dataview-warning-compact",
+			});
+			dataviewWarning.createEl("span", {
+				text: "Dataview not available",
+				cls: "dataview-warning-text",
+			});
 			return;
 		}
 
@@ -624,19 +638,16 @@ class TaskProgressBarView extends ItemView {
 			}
 
 			// Sử dụng regex chính xác hơn để đếm task
-			// Use a more flexible regex that can catch tasks in various formats
 			const incompleteTasks = (content.match(/- \[ \]/g) || []).length;
-			const completedTasks = (content.match(/- \[x\]/gi) || []).length; // Thêm cờ 'i' để bắt cả 'x' và 'X'
+			const completedTasks = (content.match(/- \[x\]/gi) || []).length; 
 			let totalTasks = incompleteTasks + completedTasks;
 
 			// Try with relaxed regex if needed
 			let relaxedIncompleteTasks = 0;
 			let relaxedCompletedTasks = 0;
 			if (totalTasks === 0) {
-				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || [])
-					.length;
-				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || [])
-					.length;
+				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || []).length;
+				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || []).length;
 				totalTasks = relaxedIncompleteTasks + relaxedCompletedTasks;
 			}
 
@@ -655,23 +666,12 @@ class TaskProgressBarView extends ItemView {
 			}
 
 			if (totalTasks === 0) {
-				// Only update the container if it's not already showing "No tasks found"
-				const existingNoTasks = container.querySelector("p");
-				if (
-					!existingNoTasks ||
-					existingNoTasks.textContent !==
-						"No tasks found in this file"
-				) {
-					container.empty();
-					container.createEl("p", {
-						text: "No tasks found in this file",
-					});
-				}
+				// No tasks found, show message and return
+				container.createEl("p", {
+					text: "No tasks found in this file",
+				});
 				return;
 			}
-
-			// We found tasks, so clear and update the container
-			container.empty();
 
 			// Calculate percentage based on which regex found tasks
 			let completedCount =
@@ -690,17 +690,10 @@ class TaskProgressBarView extends ItemView {
 			);
 		} catch (error) {
 			console.error("Error creating progress bar from string:", error);
-			// Only update if container isn't already showing an error
-			const errorParagraph = container.querySelector("p");
-			if (
-				!errorParagraph ||
-				!errorParagraph.textContent?.includes("Error")
-			) {
-				container.empty();
-				container.createEl("p", {
-					text: "Error creating progress bar",
-				});
-			}
+			container.empty();
+			container.createEl("p", {
+				text: "Error creating progress bar",
+			});
 		}
 	}
 
