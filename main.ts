@@ -78,6 +78,9 @@ interface TaskProgressBarSettings {
 	autoUpdateMetadata: boolean; // Add new setting to control metadata auto-update feature
 	autoChangeStatus: boolean; // Control whether to change status
 	autoUpdateFinishedDate: boolean; // Control whether to update finished date
+	statusTodo: string;       // Status for 0% progress
+	statusInProgress: string; // Status for 1-99% progress
+	statusCompleted: string;  // Status for 100% progress
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
@@ -100,6 +103,9 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	autoUpdateMetadata: true, // Default to enabled
 	autoChangeStatus: true, // Default to enabled
 	autoUpdateFinishedDate: true, // Default to enabled
+	statusTodo: "Todo",            // Default status for 0% progress
+	statusInProgress: "In Progress", // Default status for 1-99% progress
+	statusCompleted: "Completed",    // Default status for 100% progress
 };
 
 export default class TaskProgressBarPlugin extends Plugin {
@@ -697,6 +703,11 @@ class TaskProgressBarView extends ItemView {
 
 			const percentage = Math.round((completedCount / totalTasks) * 100);
 
+			// Update status based on progress percentage (do this for all files)
+			if (this.plugin.settings.autoChangeStatus) {
+				await this.updateStatusBasedOnProgress(file, percentage);
+			}
+
 			// Check if all tasks are completed (100%) and update metadata if enabled
 			if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
 				// Only update metadata and show notification if this file hasn't been marked as completed yet
@@ -708,7 +719,10 @@ class TaskProgressBarView extends ItemView {
 			} else if (percentage < 100) {
 				// If percentage is less than 100%, remove from completed files map
 				// This allows re-notification if the tasks are completed again after being incomplete
-				this.completedFilesMap.delete(file.path);
+				if (this.completedFilesMap.has(file.path)) {
+					this.completedFilesMap.delete(file.path);
+					// No need for automatic notification here as updateStatusBasedOnProgress will handle it
+				}
 			}
 
 			// Create the progress bar elements
@@ -750,28 +764,40 @@ class TaskProgressBarView extends ItemView {
 			// Define today's date at the beginning of the function so it's available throughout
 			const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
 
-				// Check if status is already "Completed" to avoid unnecessary updates
-			const statusAlreadyCompleted = /status\s*:\s*Completed/i.test(yaml);
-			
-			// Update status from "In Progress" to "Completed" if enabled and not already complete
-			if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
-				const statusRegex = /(status\s*:\s*)In Progress/i;
-				if (statusRegex.test(yaml)) {
-					updatedYaml = updatedYaml.replace(
-						statusRegex,
-						"$1Completed"
-					);
-					needsUpdate = true;
+			// Check for existing status
+			const statusRegex = /status\s*:\s*([^\n]+)/i;
+			const statusMatch = yaml.match(statusRegex);
+			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
+
+			// Update status based on settings if enabled
+			if (this.plugin.settings.autoChangeStatus) {
+				const targetStatus = this.plugin.settings.statusCompleted;
+				
+				// Only update if the current status isn't already the completed status
+				if (currentStatus !== targetStatus) {
+					if (statusMatch) {
+						// Replace existing status
+						updatedYaml = updatedYaml.replace(
+							statusRegex,
+							`status: ${targetStatus}`
+						);
+						needsUpdate = true;
+					} else {
+						// Add status if it doesn't exist
+						updatedYaml = updatedYaml.trim() + `\nstatus: ${targetStatus}`;
+						needsUpdate = true;
+					}
 
 					if (this.plugin.settings.showDebugInfo) {
 						console.log(
-							"Updating status to Completed in file:",
+							`Updating status to ${targetStatus} in file:`,
 							file.path
 						);
 					}
 				}
 			}
 
+			// Update finished date functionality remains the same
 			// Check if finished date already exists and matches today's date
 			const finishedDateRegex = /finished\s*:\s*(\d{4}-\d{2}-\d{2})/i;
 			const finishedDateMatch = yaml.match(finishedDateRegex);
@@ -812,11 +838,13 @@ class TaskProgressBarView extends ItemView {
 
 				// Show more detailed notification about what was updated
 				let updateMessage = `Updated metadata for ${file.basename}`;
-				if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
-					updateMessage += ": Status set to Completed";
+				
+				if (this.plugin.settings.autoChangeStatus && currentStatus !== this.plugin.settings.statusCompleted) {
+					updateMessage += `: Status set to "${this.plugin.settings.statusCompleted}"`;
 				}
+				
 				if (this.plugin.settings.autoUpdateFinishedDate && !finishedDateAlreadySet) {
-					if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
+					if (this.plugin.settings.autoChangeStatus && currentStatus !== this.plugin.settings.statusCompleted) {
 						updateMessage += " and";
 					}
 					updateMessage += ` finished date set to ${today}`;
@@ -830,6 +858,97 @@ class TaskProgressBarView extends ItemView {
 					`Error updating metadata for ${file.basename}: ${error.message}`
 				);
 			}
+		}
+	}
+
+	// Add a new method to update status based on progress percentage
+	async updateStatusBasedOnProgress(file: TFile, progressPercentage: number) {
+		if (!file || !this.plugin.settings.autoChangeStatus) return;
+		
+		try {
+			// Read the file content
+			const content = await this.plugin.app.vault.read(file);
+			
+			// Check if file has YAML frontmatter
+			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
+			const yamlMatch = content.match(yamlRegex);
+			
+			if (!yamlMatch) return;
+			
+			let yaml = yamlMatch[1];
+			let updatedYaml = yaml;
+			let needsUpdate = false;
+			
+			// Determine target status based on progress percentage
+			let targetStatus = this.plugin.settings.statusInProgress;
+			
+			if (progressPercentage === 0) {
+				targetStatus = this.plugin.settings.statusTodo;
+			} else if (progressPercentage === 100) {
+				targetStatus = this.plugin.settings.statusCompleted;
+			}
+			
+			// Check for existing status
+			const statusRegex = /status\s*:\s*([^\n]+)/i;
+			const statusMatch = yaml.match(statusRegex);
+			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
+			
+			// Update if status is different
+			if (currentStatus !== targetStatus) {
+				if (statusMatch) {
+					// Replace existing status
+					updatedYaml = updatedYaml.replace(
+						statusRegex,
+						`status: ${targetStatus}`
+					);
+				} else {
+					// Add status if it doesn't exist
+					updatedYaml = updatedYaml.trim() + `\nstatus: ${targetStatus}`;
+				}
+				needsUpdate = true;
+			}
+			
+			 // Remove finished date if progress is less than 100%
+			if (progressPercentage < 100 && this.plugin.settings.autoUpdateFinishedDate) {
+				const finishedRegex = /finished\s*:\s*[^\n]+\n?/i;
+				if (finishedRegex.test(updatedYaml)) {
+					// Remove the finished date line entirely
+					updatedYaml = updatedYaml.replace(finishedRegex, '');
+					// Remove any extra newlines that might have been left
+					updatedYaml = updatedYaml.replace(/\n\n+/g, '\n');
+					updatedYaml = updatedYaml.trim();
+					needsUpdate = true;
+					
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(`Removed finished date from file ${file.path} because progress is ${progressPercentage}%`);
+					}
+				}
+			}
+			
+			// Update file if needed
+			if (needsUpdate) {
+				const updatedContent = content.replace(
+					yamlRegex,
+					`---\n${updatedYaml}\n---`
+				);
+				await this.plugin.app.vault.modify(file, updatedContent);
+				
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`, file.path);
+				}
+				
+				// Optional notification for status change - only show for completed to avoid too many notifications
+				if (progressPercentage === 100) {
+					// Already handled by the completion notification
+				} else if (progressPercentage < 100 && this.plugin.settings.autoUpdateFinishedDate) {
+					// Only show notification for removal of finished date if specifically enabled
+					if (this.plugin.settings.showDebugInfo) {
+						new Notice(`Updated status to "${targetStatus}" and removed finished date for ${file.basename}`);
+					}
+				}
+			}
+		} catch (error) {
+			console.error("Error updating status based on progress:", error);
 		}
 	}
 
@@ -1517,6 +1636,78 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+
+			// Show status label settings if status changing is enabled
+			if (this.plugin.settings.autoChangeStatus) {
+				new Setting(containerEl)
+					.setName("Todo Status Label")
+					.setDesc("Status label for files with 0% progress")
+					.addText((text) =>
+						text
+							.setPlaceholder("Todo")
+							.setValue(this.plugin.settings.statusTodo)
+							.onChange(async (value) => {
+								this.plugin.settings.statusTodo = value;
+								await this.plugin.saveSettings();
+							})
+					)
+					.addExtraButton((button) =>
+						button
+							.setIcon("reset")
+							.setTooltip("Reset to default")
+							.onClick(async () => {
+								this.plugin.settings.statusTodo = "Todo";
+								await this.plugin.saveSettings();
+								this.display();
+							})
+					);
+
+				new Setting(containerEl)
+					.setName("In Progress Status Label")
+					.setDesc("Status label for files with 1-99% progress")
+					.addText((text) =>
+						text
+							.setPlaceholder("In Progress")
+							.setValue(this.plugin.settings.statusInProgress)
+							.onChange(async (value) => {
+								this.plugin.settings.statusInProgress = value;
+								await this.plugin.saveSettings();
+							})
+					)
+					.addExtraButton((button) =>
+						button
+							.setIcon("reset")
+							.setTooltip("Reset to default")
+							.onClick(async () => {
+								this.plugin.settings.statusInProgress = "In Progress";
+								await this.plugin.saveSettings();
+								this.display();
+							})
+					);
+
+				new Setting(containerEl)
+					.setName("Completed Status Label")
+					.setDesc("Status label for files with 100% progress")
+					.addText((text) =>
+						text
+							.setPlaceholder("Completed")
+							.setValue(this.plugin.settings.statusCompleted)
+							.onChange(async (value) => {
+								this.plugin.settings.statusCompleted = value;
+								await this.plugin.saveSettings();
+							})
+					)
+					.addExtraButton((button) =>
+						button
+							.setIcon("reset")
+							.setTooltip("Reset to default")
+							.onClick(async () => {
+								this.plugin.settings.statusCompleted = "Completed";
+								await this.plugin.saveSettings();
+								this.display();
+							})
+					);
+			}
 		}
 	}
 }
