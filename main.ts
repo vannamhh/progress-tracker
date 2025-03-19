@@ -75,6 +75,9 @@ interface TaskProgressBarSettings {
 	keyboardInputDelay: number; // Add keyboard input delay
 	checkboxClickDelay: number; // Add checkbox click delay
 	maxTabsHeight: string; // New setting for max-height of workspace tabs
+	autoUpdateMetadata: boolean; // Add new setting to control metadata auto-update feature
+	autoChangeStatus: boolean; // Control whether to change status
+	autoUpdateFinishedDate: boolean; // Control whether to update finished date
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
@@ -93,7 +96,10 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	editorChangeDelay: 500, // Default editor change delay (500ms)
 	keyboardInputDelay: 100, // Default keyboard input delay (10ms)
 	checkboxClickDelay: 200, // Default checkbox click delay (50ms)
-	maxTabsHeight: "auto" // Default to "auto"
+	maxTabsHeight: "auto", // Default to "auto"
+	autoUpdateMetadata: true, // Default to enabled
+	autoChangeStatus: true, // Default to enabled
+	autoUpdateFinishedDate: true, // Default to enabled
 };
 
 export default class TaskProgressBarPlugin extends Plugin {
@@ -107,7 +113,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		 // Apply the max-height CSS style as soon as the plugin loads
+		// Apply the max-height CSS style as soon as the plugin loads
 		this.applyMaxTabsHeightStyle();
 
 		// Register view type for the sidebar
@@ -133,7 +139,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 				if (file) {
 					this.lastActiveFile = file;
 
-					 // Always update when file changes to ensure accurate display
+					// Always update when file changes to ensure accurate display
 					setTimeout(async () => {
 						await this.updateLastFileContent(file);
 						if (this.sidebarView) {
@@ -280,6 +286,18 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}
 			}, 1500);
 		}, 1000);
+
+		// Register commands
+		this.addCommand({
+			id: 'clear-completed-files-cache',
+			name: 'Clear Completed Files Cache',
+			callback: () => {
+				if (this.sidebarView) {
+					this.sidebarView.clearCompletedFilesCache();
+					new Notice('Completed files cache cleared. Files can trigger completion notifications again.');
+				}
+			}
+		});
 	}
 
 	// Kiểm tra Dataview API và thiết lập interval để kiểm tra lại nếu chưa có
@@ -391,6 +409,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 		// Detach the view when plugin unloads
 		this.app.workspace.detachLeavesOfType("progress-tracker");
+
+		// Clear any in-memory data
+		if (this.sidebarView) {
+			this.sidebarView.clearCompletedFilesCache();
+		}
 	}
 
 	async loadSettings() {
@@ -416,15 +439,17 @@ export default class TaskProgressBarPlugin extends Plugin {
 	applyMaxTabsHeightStyle() {
 		try {
 			// Remove any existing style element first
-			const existingStyle = document.getElementById('progress-tracker-max-tabs-height');
+			const existingStyle = document.getElementById(
+				"progress-tracker-max-tabs-height"
+			);
 			if (existingStyle) {
 				existingStyle.remove();
 			}
 
 			// Create a new style element
-			const style = document.createElement('style');
-			style.id = 'progress-tracker-max-tabs-height';
-			
+			const style = document.createElement("style");
+			style.id = "progress-tracker-max-tabs-height";
+
 			// Set the CSS rule with the user's preference
 			style.textContent = `
 				.workspace-tabs.mod-top.mod-top-right-space:not(.mod-top-left-space) {
@@ -432,13 +457,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 					transition: max-height 0.3s ease;
 				}
 			`;
-			
+
 			// Add the style to the document head
 			document.head.appendChild(style);
-			
+
 			// Debug info
 			if (this.settings.showDebugInfo) {
-				console.log(`Applied max-tabs-height: ${this.settings.maxTabsHeight}`);
+				console.log(
+					`Applied max-tabs-height: ${this.settings.maxTabsHeight}`
+				);
 			}
 		} catch (error) {
 			console.error("Error applying max tabs height style:", error);
@@ -453,6 +480,7 @@ class TaskProgressBarView extends ItemView {
 	lastUpdateTime: number = 0;
 	lastFileUpdateMap: Map<string, number> = new Map(); // Track last update time per file
 	initialLoadComplete: boolean = false; // Track if initial load is complete
+	completedFilesMap: Map<string, boolean> = new Map(); // Track which files have been marked as completed
 
 	constructor(leaf: WorkspaceLeaf, plugin: TaskProgressBarPlugin) {
 		super(leaf);
@@ -537,9 +565,10 @@ class TaskProgressBarView extends ItemView {
 						text: "No tasks found in this file",
 					});
 				} else {
-					this.updateProgressBarContentWithString(
-						content,
+					// Create progress bar directly with content
+					this.createProgressBarFromString(
 						progressContainer,
+						content,
 						file
 					);
 				}
@@ -557,9 +586,10 @@ class TaskProgressBarView extends ItemView {
 						console.log("No tasks found in file:", file.path);
 					}
 				} else {
-					this.updateProgressBarContentWithString(
-						fileContent,
+					// Create progress bar directly with file content
+					this.createProgressBarFromString(
 						progressContainer,
+						fileContent,
 						file
 					);
 				}
@@ -568,7 +598,7 @@ class TaskProgressBarView extends ItemView {
 			console.error("Error updating progress bar:", error);
 			progressContainer.empty();
 			progressContainer.createEl("p", {
-				text: "Error updating progress bar",
+				text: `Error updating progress bar: ${error.message}`,
 			});
 		} finally {
 			// Xóa class sau khi cập nhật xong, chỉ khi animation được bật
@@ -585,43 +615,11 @@ class TaskProgressBarView extends ItemView {
 		// Improved and more accurate task detection
 		const standardTaskRegex = /- \[[x ]\]/i;
 		const relaxedTaskRegex = /[-*] \[[x ]\]/i;
-		
+
 		// Return true if either regex matches
-		return standardTaskRegex.test(content) || relaxedTaskRegex.test(content);
-	}
-
-	// Phương thức mới để cập nhật với nội dung string trực tiếp
-	async updateProgressBarContentWithString(
-		content: string,
-		progressContainer: HTMLElement,
-		file: TFile
-	) {
-		 // Always clear the container to prevent showing stale content
-		progressContainer.empty();
-
-		// Get Dataview API
-		const dvAPI = this.plugin.dvAPI;
-		if (!dvAPI) {
-			const dataviewWarning = progressContainer.createDiv({
-				cls: "dataview-warning-compact",
-			});
-			dataviewWarning.createEl("span", {
-				text: "Dataview not available",
-				cls: "dataview-warning-text",
-			});
-			return;
-		}
-
-		try {
-			// Tạo thanh tiến trình trực tiếp từ nội dung
-			this.createProgressBarFromString(progressContainer, content, file);
-		} catch (error) {
-			console.error("Error updating progress bar:", error);
-			progressContainer.empty();
-			progressContainer.createEl("p", {
-				text: "Error loading progress bar",
-			});
-		}
+		return (
+			standardTaskRegex.test(content) || relaxedTaskRegex.test(content)
+		);
 	}
 
 	// Phương thức tạo thanh tiến trình từ nội dung string
@@ -630,6 +628,9 @@ class TaskProgressBarView extends ItemView {
 		content: string,
 		file: TFile
 	) {
+		// Always clear the container first to ensure clean state
+		container.empty();
+
 		try {
 			// Log for debugging if enabled
 			if (this.plugin.settings.showDebugInfo) {
@@ -637,17 +638,32 @@ class TaskProgressBarView extends ItemView {
 				console.log(`Content length: ${content.length}`);
 			}
 
+			// Get Dataview API - only check for warning display
+			const dvAPI = this.plugin.dvAPI;
+			if (!dvAPI) {
+				const dataviewWarning = container.createDiv({
+					cls: "dataview-warning-compact",
+				});
+				dataviewWarning.createEl("span", {
+					text: "Dataview not available",
+					cls: "dataview-warning-text",
+				});
+				return;
+			}
+
 			// Sử dụng regex chính xác hơn để đếm task
 			const incompleteTasks = (content.match(/- \[ \]/g) || []).length;
-			const completedTasks = (content.match(/- \[x\]/gi) || []).length; 
+			const completedTasks = (content.match(/- \[x\]/gi) || []).length;
 			let totalTasks = incompleteTasks + completedTasks;
 
 			// Try with relaxed regex if needed
 			let relaxedIncompleteTasks = 0;
 			let relaxedCompletedTasks = 0;
 			if (totalTasks === 0) {
-				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || []).length;
-				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || []).length;
+				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || [])
+					.length;
+				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || [])
+					.length;
 				totalTasks = relaxedIncompleteTasks + relaxedCompletedTasks;
 			}
 
@@ -681,6 +697,20 @@ class TaskProgressBarView extends ItemView {
 
 			const percentage = Math.round((completedCount / totalTasks) * 100);
 
+			// Check if all tasks are completed (100%) and update metadata if enabled
+			if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
+				// Only update metadata and show notification if this file hasn't been marked as completed yet
+				if (!this.completedFilesMap.has(file.path)) {
+					await this.updateFileMetadata(file, content);
+					// Mark this file as completed to avoid repeated updates
+					this.completedFilesMap.set(file.path, true);
+				}
+			} else if (percentage < 100) {
+				// If percentage is less than 100%, remove from completed files map
+				// This allows re-notification if the tasks are completed again after being incomplete
+				this.completedFilesMap.delete(file.path);
+			}
+
 			// Create the progress bar elements
 			this.createProgressBarElements(
 				container,
@@ -692,8 +722,114 @@ class TaskProgressBarView extends ItemView {
 			console.error("Error creating progress bar from string:", error);
 			container.empty();
 			container.createEl("p", {
-				text: "Error creating progress bar",
+				text: `Error creating progress bar: ${error.message}`,
 			});
+		}
+	}
+
+	// New method to update file metadata when tasks are completed
+	async updateFileMetadata(file: TFile, content: string) {
+		try {
+			// Check if file has YAML frontmatter
+			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
+			const yamlMatch = content.match(yamlRegex);
+
+			if (!yamlMatch) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						"No YAML frontmatter found in file:",
+						file.path
+					);
+				}
+				return;
+			}
+
+			let yaml = yamlMatch[1];
+			let needsUpdate = false;
+			let updatedYaml = yaml;
+			// Define today's date at the beginning of the function so it's available throughout
+			const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+
+				// Check if status is already "Completed" to avoid unnecessary updates
+			const statusAlreadyCompleted = /status\s*:\s*Completed/i.test(yaml);
+			
+			// Update status from "In Progress" to "Completed" if enabled and not already complete
+			if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
+				const statusRegex = /(status\s*:\s*)In Progress/i;
+				if (statusRegex.test(yaml)) {
+					updatedYaml = updatedYaml.replace(
+						statusRegex,
+						"$1Completed"
+					);
+					needsUpdate = true;
+
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							"Updating status to Completed in file:",
+							file.path
+						);
+					}
+				}
+			}
+
+			// Check if finished date already exists and matches today's date
+			const finishedDateRegex = /finished\s*:\s*(\d{4}-\d{2}-\d{2})/i;
+			const finishedDateMatch = yaml.match(finishedDateRegex);
+			const finishedDateAlreadySet = finishedDateMatch && finishedDateMatch[1] === today;
+
+			// Update finished date only if enabled and not already set to today's date
+			if (this.plugin.settings.autoUpdateFinishedDate && !finishedDateAlreadySet) {
+				const finishedRegex = /(finished\s*:)\s*([^\n]*)/i;
+
+				if (finishedRegex.test(yaml)) {
+					// Replace existing finished date with proper spacing
+					updatedYaml = updatedYaml.replace(
+						finishedRegex,
+						`$1 ${today}`
+					);
+					needsUpdate = true;
+				} else {
+					// Add finished date if it doesn't exist, ensuring proper spacing
+					updatedYaml = updatedYaml.trim() + `\nfinished: ${today}`;
+					needsUpdate = true;
+				}
+
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Updating finished date to ${today} in file:`,
+						file.path
+					);
+				}
+			}
+
+			// Update file content if changes were made
+			if (needsUpdate) {
+				const updatedContent = content.replace(
+					yamlRegex,
+					`---\n${updatedYaml}\n---`
+				);
+				await this.plugin.app.vault.modify(file, updatedContent);
+
+				// Show more detailed notification about what was updated
+				let updateMessage = `Updated metadata for ${file.basename}`;
+				if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
+					updateMessage += ": Status set to Completed";
+				}
+				if (this.plugin.settings.autoUpdateFinishedDate && !finishedDateAlreadySet) {
+					if (this.plugin.settings.autoChangeStatus && !statusAlreadyCompleted) {
+						updateMessage += " and";
+					}
+					updateMessage += ` finished date set to ${today}`;
+				}
+				new Notice(updateMessage);
+			}
+		} catch (error) {
+			console.error("Error updating file metadata:", error);
+			if (this.plugin.settings.showDebugInfo) {
+				new Notice(
+					`Error updating metadata for ${file.basename}: ${error.message}`
+				);
+			}
 		}
 	}
 
@@ -807,6 +943,15 @@ class TaskProgressBarView extends ItemView {
 				Medium threshold: ${settings.mediumProgressThreshold}%, 
 				High threshold: ${settings.highProgressThreshold}%,
 				Applied color: ${progressElement.style.backgroundColor}`);
+		}
+	}
+
+	// Add a method to clear the completed files map when needed
+	// For example, when plugin is unloaded or when explicitly requested
+	clearCompletedFilesCache() {
+		this.completedFilesMap.clear();
+		if (this.plugin.settings.showDebugInfo) {
+			console.log("Cleared completed files cache");
 		}
 	}
 }
@@ -1265,21 +1410,23 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		// Fix the Max Tabs Height setting to allow proper input
 		new Setting(containerEl)
 			.setName("Max Tabs Height")
-			.setDesc("Maximum height for workspace tabs (e.g., 110px, 200px, auto)")
+			.setDesc(
+				"Maximum height for workspace tabs (e.g., 110px, 200px, auto)"
+			)
 			.addText((text) => {
 				// Set initial value
 				text.setValue(this.plugin.settings.maxTabsHeight);
-				
+
 				// Apply improved validation only when the field loses focus
 				// This allows typing intermediary values that may not be valid yet
 				text.inputEl.addEventListener("blur", async () => {
 					const value = text.inputEl.value;
 					// Validate only when user is done editing
-					const isValid = 
-						value === "auto" || 
-						value === "none" || 
+					const isValid =
+						value === "auto" ||
+						value === "none" ||
 						/^\d+(\.\d+)?(px|em|rem|vh|%)$/.test(value);
-					
+
 					if (isValid) {
 						// Only update if changed to avoid unnecessary saves
 						if (this.plugin.settings.maxTabsHeight !== value) {
@@ -1288,12 +1435,14 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 							new Notice(`Max tabs height updated to ${value}`);
 						}
 					} else {
-						new Notice("Please enter 'auto', 'none' or a valid CSS length value (e.g., 110px)");
+						new Notice(
+							"Please enter 'auto', 'none' or a valid CSS length value (e.g., 110px)"
+						);
 						// Reset to previous valid value
 						text.setValue(this.plugin.settings.maxTabsHeight);
 					}
 				});
-				
+
 				// Add Enter key handling
 				text.inputEl.addEventListener("keydown", async (event) => {
 					if (event.key === "Enter") {
@@ -1301,22 +1450,73 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 						text.inputEl.blur(); // Trigger the blur event to validate
 					}
 				});
-				
+
 				// Improve UX
 				text.inputEl.style.width = "120px";
 				text.inputEl.placeholder = "auto";
-				
+
 				return text;
 			})
-			.addExtraButton(button => button
-				.setIcon("reset")
-				.setTooltip("Reset to default (auto)")
-				.onClick(async () => {
-					this.plugin.settings.maxTabsHeight = "auto";
-					await this.plugin.saveSettings();
-					this.display(); // Refresh the settings panel
-					new Notice("Max tabs height reset to 'auto'");
-				})
+			.addExtraButton((button) =>
+				button
+					.setIcon("reset")
+					.setTooltip("Reset to default (auto)")
+					.onClick(async () => {
+						this.plugin.settings.maxTabsHeight = "auto";
+						await this.plugin.saveSettings();
+						this.display(); // Refresh the settings panel
+						new Notice("Max tabs height reset to 'auto'");
+					})
 			);
+
+		// Add Metadata Auto-Update Settings
+		containerEl.createEl("h3", { text: "Metadata Auto-Update" });
+
+		new Setting(containerEl)
+			.setName("Auto-update metadata")
+			.setDesc(
+				"Automatically update metadata when all tasks are completed"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoUpdateMetadata)
+					.onChange(async (value) => {
+						this.plugin.settings.autoUpdateMetadata = value;
+						await this.plugin.saveSettings();
+						// Refresh the display to show/hide related settings
+						this.display();
+					})
+			);
+
+		// Only show these settings if auto-update is enabled
+		if (this.plugin.settings.autoUpdateMetadata) {
+			new Setting(containerEl)
+				.setName("Change status")
+				.setDesc(
+					"Change 'status: In Progress' to 'status: Completed' when tasks reach 100%"
+				)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.autoChangeStatus)
+						.onChange(async (value) => {
+							this.plugin.settings.autoChangeStatus = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			new Setting(containerEl)
+				.setName("Update finished date")
+				.setDesc(
+					"Set 'finished: ' to today's date when tasks reach 100%"
+				)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.autoUpdateFinishedDate)
+						.onChange(async (value) => {
+							this.plugin.settings.autoUpdateFinishedDate = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		}
 	}
 }
