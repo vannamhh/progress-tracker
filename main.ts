@@ -549,14 +549,17 @@ class TaskProgressBarView extends ItemView {
 		try {
 			// Cập nhật ngay lập tức nếu có nội dung được cung cấp
 			if (content) {
-				// Always clear content to avoid showing previous file's progress
 				if (!this.hasTasksInContent(content)) {
-					progressContainer.empty();
-					progressContainer.createEl("p", {
-						text: "No tasks found in this file",
-					});
+					// Only clear if not already showing "no tasks" message
+					if (!progressContainer.querySelector(".no-tasks-message")) {
+						progressContainer.empty();
+						progressContainer.createEl("p", {
+							text: "No tasks found in this file",
+							cls: "no-tasks-message"
+						});
+					}
 				} else {
-					// Create progress bar directly with content
+					// Create/update progress bar with content
 					this.createProgressBarFromString(
 						progressContainer,
 						content,
@@ -567,17 +570,20 @@ class TaskProgressBarView extends ItemView {
 				// Đọc nội dung file
 				const fileContent = await this.plugin.app.vault.read(file);
 
-				// Always clear content and show appropriate message if no tasks
 				if (!this.hasTasksInContent(fileContent)) {
-					progressContainer.empty();
-					progressContainer.createEl("p", {
-						text: "No tasks found in this file",
-					});
+					// Only clear if not already showing "no tasks" message
+					if (!progressContainer.querySelector(".no-tasks-message")) {
+						progressContainer.empty();
+						progressContainer.createEl("p", {
+							text: "No tasks found in this file",
+							cls: "no-tasks-message"
+						});
+					}
 					if (this.plugin.settings.showDebugInfo) {
 						console.log("No tasks found in file:", file.path);
 					}
 				} else {
-					// Create progress bar directly with file content
+					// Create/update progress bar with content
 					this.createProgressBarFromString(
 						progressContainer,
 						fileContent,
@@ -619,9 +625,6 @@ class TaskProgressBarView extends ItemView {
 		content: string,
 		file: TFile
 	) {
-		// Always clear the container first to ensure clean state
-		container.empty();
-
 		try {
 			// Log for debugging if enabled
 			if (this.plugin.settings.showDebugInfo) {
@@ -632,13 +635,17 @@ class TaskProgressBarView extends ItemView {
 			// Get Dataview API - only check for warning display
 			const dvAPI = this.plugin.dvAPI;
 			if (!dvAPI) {
-				const dataviewWarning = container.createDiv({
-					cls: "dataview-warning-compact",
-				});
-				dataviewWarning.createEl("span", {
-					text: "Dataview not available",
-					cls: "dataview-warning-text",
-				});
+				// Only clear and create warning if not already showing dataview warning
+				if (!container.querySelector(".dataview-warning-compact")) {
+					container.empty();
+					const dataviewWarning = container.createDiv({
+						cls: "dataview-warning-compact",
+					});
+					dataviewWarning.createEl("span", {
+						text: "Dataview not available",
+						cls: "dataview-warning-text",
+					});
+				}
 				return;
 			}
 
@@ -651,10 +658,8 @@ class TaskProgressBarView extends ItemView {
 			let relaxedIncompleteTasks = 0;
 			let relaxedCompletedTasks = 0;
 			if (totalTasks === 0) {
-				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || [])
-					.length;
-				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || [])
-					.length;
+				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || []).length;
+				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || []).length;
 				totalTasks = relaxedIncompleteTasks + relaxedCompletedTasks;
 			}
 
@@ -673,10 +678,14 @@ class TaskProgressBarView extends ItemView {
 			}
 
 			if (totalTasks === 0) {
-				// No tasks found, show message and return
-				container.createEl("p", {
-					text: "No tasks found in this file",
-				});
+				// No tasks found, show message - but only if not already showing the message
+				if (!container.querySelector(".no-tasks-message")) {
+					container.empty();
+					container.createEl("p", {
+						text: "No tasks found in this file",
+						cls: "no-tasks-message"
+					});
+				}
 				return;
 			}
 
@@ -723,19 +732,367 @@ class TaskProgressBarView extends ItemView {
 				}
 			}
 
-			// Create the progress bar elements
-			this.createProgressBarElements(
-				container,
-				completedCount,
-				totalTasks,
-				percentage
-			);
+			// Check if we already have progress elements
+			let progressLayout = container.querySelector(".progress-layout") as HTMLElement;
+			let statsContainer = container.querySelector(".progress-stats-compact") as HTMLElement;
+			
+			// If no existing elements, create container structure
+			if (!progressLayout || !statsContainer) {
+				container.empty();
+				
+				// Create a more compact layout
+				progressLayout = container.createDiv({ cls: "progress-layout" });
+				
+				// Create percentage text element
+				progressLayout.createEl("div", {
+					cls: "progress-percentage-small",
+				});
+				
+				// Create HTML5-like progress bar
+				const progressBarContainer = progressLayout.createDiv({
+					cls: "pt-progress-bar-container",
+				});
+				
+				// Create the outer progress element
+				const progressElement = progressBarContainer.createDiv({
+					cls: "progress-element",
+				});
+				
+				// Create the inner value element that will be animated
+				progressElement.createDiv({
+					cls: "progress-value",
+				});
+				
+				// Create stats container at the bottom
+				statsContainer = container.createDiv({
+					cls: "progress-stats-compact",
+				});
+			}
+			
+			// Now update the existing elements with new values
+			
+			// Update percentage text
+			const percentageElement = progressLayout.querySelector(".progress-percentage-small") as HTMLElement;
+			if (percentageElement) {
+				percentageElement.setText(`${percentage}%`);
+			}
+			
+			// Update progress bar width with smooth transition
+			const progressValue = container.querySelector(".progress-value") as HTMLElement;
+			if (progressValue) {
+				// Add transition style if not already present
+				if (!progressValue.hasAttribute("data-has-transition")) {
+					progressValue.style.transition = "width 0.3s ease-in-out, background-color 0.3s ease";
+					progressValue.setAttribute("data-has-transition", "true");
+				}
+				progressValue.style.width = `${percentage}%`;
+				this.applyProgressColor(progressValue, percentage);
+			}
+			
+			// Update progress element data attribute
+			const progressElement = container.querySelector(".progress-element") as HTMLElement;
+			if (progressElement) {
+				progressElement.setAttribute("data-percentage", percentage.toString());
+			}
+			
+			// Update stats text
+			if (statsContainer) {
+				statsContainer.empty();
+				statsContainer.createSpan({
+					text: `${completedCount}/${totalTasks} tasks`,
+				});
+			}
+			
+			// Update debug info if needed
+			if (this.plugin.settings.showDebugInfo) {
+				let debugInfo = container.querySelector(".debug-info") as HTMLElement;
+				if (!debugInfo) {
+					debugInfo = container.createDiv({ cls: "debug-info" });
+				} else {
+					debugInfo.empty();
+				}
+				
+				debugInfo.createEl("p", { text: `Debug Info:` });
+				debugInfo.createEl("p", { text: `File: ${this.currentFile?.path}` });
+				debugInfo.createEl("p", { text: `Incomplete tasks: ${totalTasks - completedCount}` });
+				debugInfo.createEl("p", { text: `Completed tasks: ${completedCount}` });
+				debugInfo.createEl("p", { text: `Total tasks: ${totalTasks}` });
+				debugInfo.createEl("p", { text: `Percentage: ${percentage}%` });
+				debugInfo.createEl("p", { text: `Update time: ${new Date().toISOString()}` });
+				debugInfo.createEl("p", { text: `Color scheme: ${this.plugin.settings.progressColorScheme}` });
+			} else {
+				// Remove debug info if it exists but debug is disabled
+				const debugInfo = container.querySelector(".debug-info");
+				if (debugInfo) debugInfo.remove();
+			}
+			
 		} catch (error) {
 			console.error("Error creating progress bar from string:", error);
 			container.empty();
 			container.createEl("p", {
 				text: `Error creating progress bar: ${error.message}`,
 			});
+		}
+	}
+
+	// Method to apply color based on percentage and settings - keep logic but add smooth transition
+	applyProgressColor(progressElement: HTMLElement, percentage: number) {
+		const settings = this.plugin.settings;
+
+		// If using default color scheme, let CSS handle it
+		if (settings.progressColorScheme === "default") {
+			// Xóa bất kỳ màu inline nào đã được đặt trước đó
+			progressElement.style.backgroundColor = "";
+			return;
+		}
+
+		// Apply custom color based on percentage
+		let newColor = "";
+		if (percentage === 100) {
+			// Hoàn thành - màu xanh lá
+			newColor = settings.completeProgressColor;
+		} else if (percentage >= settings.mediumProgressThreshold) {
+			// Tiến độ cao (66-99%) - màu xanh dương
+			newColor = settings.highProgressColor;
+		} else if (percentage >= settings.lowProgressThreshold) {
+			// Tiến độ trung bình (34-65%) - màu cam/vàng
+			newColor = settings.mediumProgressColor;
+		} else {
+			// Tiến độ thấp (0-33%) - màu đỏ
+			newColor = settings.lowProgressColor;
+		}
+
+		// Only update if color has changed
+		if (progressElement.style.backgroundColor !== newColor) {
+			progressElement.style.backgroundColor = newColor;
+		}
+
+		// Thêm debug log nếu cần
+		if (this.plugin.settings.showDebugInfo) {
+			console.log(`Applied color for ${percentage}%: 
+				Color scheme: ${settings.progressColorScheme},
+				Low threshold: ${settings.lowProgressThreshold}%, 
+				Medium threshold: ${settings.mediumProgressThreshold}%, 
+				High threshold: ${settings.highProgressThreshold}%,
+				Applied color: ${newColor}`);
+		}
+	}
+
+	/**
+	 * Clear the completed files cache
+	 * Used to reset notifications for completed files
+	 */
+	clearCompletedFilesCache() {
+		this.completedFilesMap.clear();
+		if (this.plugin.settings.showDebugInfo) {
+			console.log("Cleared completed files cache");
+		}
+	}
+
+	async updateStatusBasedOnProgress(
+		file: TFile,
+		progressPercentage: number
+	): Promise<boolean> {
+		if (!file || !this.plugin.settings.autoChangeStatus) return false;
+
+		try {
+			// Read the file content
+			const content = await this.plugin.app.vault.read(file);
+
+			// Check if file has YAML frontmatter
+			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
+			const yamlMatch = content.match(yamlRegex);
+
+			if (!yamlMatch) return false;
+
+			let yaml = yamlMatch[1];
+			let updatedYaml = yaml;
+			let needsUpdate = false;
+
+			// Determine target status based on progress percentage
+			let targetStatus = this.plugin.settings.statusInProgress;
+
+			if (progressPercentage === 0) {
+				targetStatus = this.plugin.settings.statusTodo;
+			} else if (progressPercentage === 100) {
+				targetStatus = this.plugin.settings.statusCompleted;
+			}
+
+			// Check for existing status
+			const statusRegex = /status\s*:\s*([^\n]+)/i;
+			const statusMatch = yaml.match(statusRegex);
+			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
+
+			// Update if status is different
+			if (currentStatus !== targetStatus) {
+				if (statusMatch) {
+					// Replace existing status
+					updatedYaml = updatedYaml.replace(
+						statusRegex,
+						`status: ${targetStatus}`
+					);
+				} else {
+					// Add status if it doesn't exist
+					updatedYaml =
+						updatedYaml.trim() + `\nstatus: ${targetStatus}`;
+				}
+				needsUpdate = true;
+			}
+
+			// Remove finished date if progress is less than 100%
+			if (
+				progressPercentage < 100 &&
+				this.plugin.settings.autoUpdateFinishedDate
+			) {
+				const finishedRegex = /finished\s*:\s*[^\n]+\n?/i;
+				if (finishedRegex.test(updatedYaml)) {
+					// Remove the finished date line entirely
+					updatedYaml = updatedYaml.replace(finishedRegex, "");
+					// Remove any extra newlines that might have been left
+					updatedYaml = updatedYaml.replace(/\n\n+/g, "\n");
+					updatedYaml = updatedYaml.trim();
+					needsUpdate = true;
+
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							`Removed finished date from file ${file.path} because progress is ${progressPercentage}%`
+						);
+					}
+				}
+			}
+
+			// Update file if needed
+			if (needsUpdate) {
+				const updatedContent = content.replace(
+					yamlRegex,
+					`---\n${updatedYaml}\n---`
+				);
+				await this.plugin.app.vault.modify(file, updatedContent);
+
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
+						file.path
+					);
+				}
+
+				// Return true to indicate status was changed
+				return true;
+			}
+		} catch (error) {
+			console.error("Error updating status based on progress:", error);
+		}
+
+		return false; // Return false if no status change occurred
+	}
+
+	// New method to update file metadata when tasks are completed
+	async updateFileMetadata(file: TFile, content: string) {
+		try {
+			// Check if file has YAML frontmatter
+			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
+			const yamlMatch = content.match(yamlRegex);
+
+			if (!yamlMatch) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						"No YAML frontmatter found in file:",
+						file.path
+					);
+				}
+				return;
+			}
+
+			let yaml = yamlMatch[1];
+			let needsUpdate = false;
+			let updatedYaml = yaml;
+			// Define today's date at the beginning of the function so it's available throughout
+			const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+
+			// Check for existing status
+			const statusRegex = /status\s*:\s*([^\n]+)/i;
+			const statusMatch = yaml.match(statusRegex);
+			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
+
+			// Update status based on settings if enabled
+			if (this.plugin.settings.autoChangeStatus) {
+				const targetStatus = this.plugin.settings.statusCompleted;
+
+				// Only update if the current status isn't already the completed status
+				if (currentStatus !== targetStatus) {
+					if (statusMatch) {
+						// Replace existing status
+						updatedYaml = updatedYaml.replace(
+							statusRegex,
+							`status: ${targetStatus}`
+						);
+						needsUpdate = true;
+					} else {
+						// Add status if it doesn't exist
+						updatedYaml =
+							updatedYaml.trim() + `\nstatus: ${targetStatus}`;
+						needsUpdate = true;
+					}
+
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							`Updating status to ${targetStatus} in file:`,
+							file.path
+						);
+					}
+				}
+			}
+
+			// Update finished date functionality remains the same
+			// Check if finished date already exists and matches today's date
+			const finishedDateRegex = /finished\s*:\s*(\d{4}-\d{2}-\d{2})/i;
+			const finishedDateMatch = yaml.match(finishedDateRegex);
+			const finishedDateAlreadySet =
+				finishedDateMatch && finishedDateMatch[1] === today;
+
+			// Update finished date only if enabled and not already set to today's date
+			if (
+				this.plugin.settings.autoUpdateFinishedDate &&
+				!finishedDateAlreadySet
+			) {
+				const finishedRegex = /(finished\s*:)\s*([^\n]*)/i;
+
+				if (finishedRegex.test(yaml)) {
+					// Replace existing finished date with proper spacing
+					updatedYaml = updatedYaml.replace(
+						finishedRegex,
+						`$1 ${today}`
+					);
+					needsUpdate = true;
+				} else {
+					// Add finished date if it doesn't exist, ensuring proper spacing
+					updatedYaml = updatedYaml.trim() + `\nfinished: ${today}`;
+					needsUpdate = true;
+				}
+
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Updating finished date to ${today} in file:`,
+						file.path
+					);
+				}
+			}
+
+			// Update file content if changes were made
+			if (needsUpdate) {
+				const updatedContent = content.replace(
+					yamlRegex,
+					`---\n${updatedYaml}\n---`
+				);
+				await this.plugin.app.vault.modify(file, updatedContent);
+			}
+		} catch (error) {
+			console.error("Error updating file metadata:", error);
+			if (this.plugin.settings.showDebugInfo) {
+				new Notice(
+					`Error updating metadata for ${file.basename}: ${error.message}`
+				);
+			}
 		}
 	}
 
@@ -913,421 +1270,6 @@ class TaskProgressBarView extends ItemView {
 
 		// Return true if any pattern matches
 		return patterns.some((pattern) => pattern.test(boardContent));
-	}
-
-	// New method to update file metadata when tasks are completed
-	async updateFileMetadata(file: TFile, content: string) {
-		try {
-			// Check if file has YAML frontmatter
-			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
-			const yamlMatch = content.match(yamlRegex);
-
-			if (!yamlMatch) {
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						"No YAML frontmatter found in file:",
-						file.path
-					);
-				}
-				return;
-			}
-
-			let yaml = yamlMatch[1];
-			let needsUpdate = false;
-			let updatedYaml = yaml;
-			// Define today's date at the beginning of the function so it's available throughout
-			const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
-
-			// Check for existing status
-			const statusRegex = /status\s*:\s*([^\n]+)/i;
-			const statusMatch = yaml.match(statusRegex);
-			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
-
-			// Update status based on settings if enabled
-			if (this.plugin.settings.autoChangeStatus) {
-				const targetStatus = this.plugin.settings.statusCompleted;
-
-				// Only update if the current status isn't already the completed status
-				if (currentStatus !== targetStatus) {
-					if (statusMatch) {
-						// Replace existing status
-						updatedYaml = updatedYaml.replace(
-							statusRegex,
-							`status: ${targetStatus}`
-						);
-						needsUpdate = true;
-					} else {
-						// Add status if it doesn't exist
-						updatedYaml =
-							updatedYaml.trim() + `\nstatus: ${targetStatus}`;
-						needsUpdate = true;
-					}
-
-					if (this.plugin.settings.showDebugInfo) {
-						console.log(
-							`Updating status to ${targetStatus} in file:`,
-							file.path
-						);
-					}
-				}
-			}
-
-			// Update finished date functionality remains the same
-			// Check if finished date already exists and matches today's date
-			const finishedDateRegex = /finished\s*:\s*(\d{4}-\d{2}-\d{2})/i;
-			const finishedDateMatch = yaml.match(finishedDateRegex);
-			const finishedDateAlreadySet =
-				finishedDateMatch && finishedDateMatch[1] === today;
-
-			// Update finished date only if enabled and not already set to today's date
-			if (
-				this.plugin.settings.autoUpdateFinishedDate &&
-				!finishedDateAlreadySet
-			) {
-				const finishedRegex = /(finished\s*:)\s*([^\n]*)/i;
-
-				if (finishedRegex.test(yaml)) {
-					// Replace existing finished date with proper spacing
-					updatedYaml = updatedYaml.replace(
-						finishedRegex,
-						`$1 ${today}`
-					);
-					needsUpdate = true;
-				} else {
-					// Add finished date if it doesn't exist, ensuring proper spacing
-					updatedYaml = updatedYaml.trim() + `\nfinished: ${today}`;
-					needsUpdate = true;
-				}
-
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						`Updating finished date to ${today} in file:`,
-						file.path
-					);
-				}
-			}
-
-			// Update file content if changes were made
-			if (needsUpdate) {
-				const updatedContent = content.replace(
-					yamlRegex,
-					`---\n${updatedYaml}\n---`
-				);
-				await this.plugin.app.vault.modify(file, updatedContent);
-			}
-		} catch (error) {
-			console.error("Error updating file metadata:", error);
-			if (this.plugin.settings.showDebugInfo) {
-				new Notice(
-					`Error updating metadata for ${file.basename}: ${error.message}`
-				);
-			}
-		}
-	}
-
-	// Add a new method to update status based on progress percentage
-	// Modified to return whether the status was changed
-	async updateStatusBasedOnProgress(
-		file: TFile,
-		progressPercentage: number
-	): Promise<boolean> {
-		if (!file || !this.plugin.settings.autoChangeStatus) return false;
-
-		try {
-			// Read the file content
-			const content = await this.plugin.app.vault.read(file);
-
-			// Check if file has YAML frontmatter
-			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
-			const yamlMatch = content.match(yamlRegex);
-
-			if (!yamlMatch) return false;
-
-			let yaml = yamlMatch[1];
-			let updatedYaml = yaml;
-			let needsUpdate = false;
-
-			// Determine target status based on progress percentage
-			let targetStatus = this.plugin.settings.statusInProgress;
-
-			if (progressPercentage === 0) {
-				targetStatus = this.plugin.settings.statusTodo;
-			} else if (progressPercentage === 100) {
-				targetStatus = this.plugin.settings.statusCompleted;
-			}
-
-			// Check for existing status
-			const statusRegex = /status\s*:\s*([^\n]+)/i;
-			const statusMatch = yaml.match(statusRegex);
-			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
-
-			// Update if status is different
-			if (currentStatus !== targetStatus) {
-				if (statusMatch) {
-					// Replace existing status
-					updatedYaml = updatedYaml.replace(
-						statusRegex,
-						`status: ${targetStatus}`
-					);
-				} else {
-					// Add status if it doesn't exist
-					updatedYaml =
-						updatedYaml.trim() + `\nstatus: ${targetStatus}`;
-				}
-				needsUpdate = true;
-			}
-
-			// Remove finished date if progress is less than 100%
-			if (
-				progressPercentage < 100 &&
-				this.plugin.settings.autoUpdateFinishedDate
-			) {
-				const finishedRegex = /finished\s*:\s*[^\n]+\n?/i;
-				if (finishedRegex.test(updatedYaml)) {
-					// Remove the finished date line entirely
-					updatedYaml = updatedYaml.replace(finishedRegex, "");
-					// Remove any extra newlines that might have been left
-					updatedYaml = updatedYaml.replace(/\n\n+/g, "\n");
-					updatedYaml = updatedYaml.trim();
-					needsUpdate = true;
-
-					if (this.plugin.settings.showDebugInfo) {
-						console.log(
-							`Removed finished date from file ${file.path} because progress is ${progressPercentage}%`
-						);
-					}
-				}
-			}
-
-			// Update file if needed
-			if (needsUpdate) {
-				const updatedContent = content.replace(
-					yamlRegex,
-					`---\n${updatedYaml}\n---`
-				);
-				await this.plugin.app.vault.modify(file, updatedContent);
-
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						`Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
-						file.path
-					);
-				}
-
-				// Return true to indicate status was changed
-				return true;
-			}
-		} catch (error) {
-			console.error("Error updating status based on progress:", error);
-		}
-
-		return false; // Return false if no status change occurred
-	}
-
-	// New helper method to create progress bar elements
-	createProgressBarElements(
-		container: HTMLElement,
-		completedTasks: number,
-		totalTasks: number,
-		percentage: number
-	) {
-		// Create a more compact layout
-		const progressLayout = container.createDiv({ cls: "progress-layout" });
-
-		// Create percentage text with smaller size
-		progressLayout.createEl("div", {
-			text: `${percentage}%`,
-			cls: "progress-percentage-small",
-		});
-
-		// Create HTML5-like progress bar
-		const progressBarContainer = progressLayout.createDiv({
-			cls: "pt-progress-bar-container",
-		});
-
-		// Create the outer progress element (similar to HTML <progress>)
-		const progressElement = progressBarContainer.createDiv({
-			cls: "progress-element",
-		});
-
-		// Create the inner value element that shows the filled portion
-		const progressValue = progressElement.createDiv({
-			cls: "progress-value",
-		});
-		progressValue.style.width = `${percentage}%`;
-
-		// Apply color based on settings
-		this.applyProgressColor(progressValue, percentage);
-
-		// Add a data attribute for potential CSS styling based on percentage
-		progressElement.setAttribute("data-percentage", percentage.toString());
-
-		// Create stats (keep this but make it more compact)
-		const statsContainer = container.createDiv({
-			cls: "progress-stats-compact",
-		});
-		statsContainer.createSpan({
-			text: `${completedTasks}/${totalTasks} tasks`,
-		});
-
-		// Thêm debug info nếu cần
-		if (this.plugin.settings.showDebugInfo) {
-			const debugInfo = container.createDiv({ cls: "debug-info" });
-			debugInfo.createEl("p", { text: `Debug Info:` });
-			debugInfo.createEl("p", {
-				text: `File: ${this.currentFile?.path}`,
-			});
-			debugInfo.createEl("p", {
-				text: `Incomplete tasks: ${totalTasks - completedTasks}`,
-			});
-			debugInfo.createEl("p", {
-				text: `Completed tasks: ${completedTasks}`,
-			});
-			debugInfo.createEl("p", { text: `Total tasks: ${totalTasks}` });
-			debugInfo.createEl("p", { text: `Percentage: ${percentage}%` });
-			debugInfo.createEl("p", {
-				text: `Update time: ${new Date().toISOString()}`,
-			});
-			debugInfo.createEl("p", {
-				text: `Color scheme: ${this.plugin.settings.progressColorScheme}`,
-			});
-		}
-	}
-
-	async onClose() {
-		this.isVisible = false;
-	}
-
-	// Method to apply color based on percentage and settings
-	applyProgressColor(progressElement: HTMLElement, percentage: number) {
-		const settings = this.plugin.settings;
-
-		// If using default color scheme, let CSS handle it
-		if (settings.progressColorScheme === "default") {
-			// Xóa bất kỳ màu inline nào đã được đặt trước đó
-			progressElement.style.backgroundColor = "";
-			return;
-		}
-
-		// Apply custom color based on percentage
-		if (percentage === 100) {
-			// Hoàn thành - màu xanh lá
-			progressElement.style.backgroundColor =
-				settings.completeProgressColor;
-		} else if (percentage >= settings.mediumProgressThreshold) {
-			// Tiến độ cao (66-99%) - màu xanh dương
-			progressElement.style.backgroundColor = settings.highProgressColor;
-		} else if (percentage >= settings.lowProgressThreshold) {
-			// Tiến độ trung bình (34-65%) - màu cam/vàng
-			progressElement.style.backgroundColor =
-				settings.mediumProgressColor;
-		} else {
-			// Tiến độ thấp (0-33%) - màu đỏ
-			progressElement.style.backgroundColor = settings.lowProgressColor;
-		}
-
-		// Thêm debug log nếu cần
-		if (this.plugin.settings.showDebugInfo) {
-			console.log(`Applied color for ${percentage}%: 
-				Color scheme: ${settings.progressColorScheme},
-				Low threshold: ${settings.lowProgressThreshold}%, 
-				Medium threshold: ${settings.mediumProgressThreshold}%, 
-				High threshold: ${settings.highProgressThreshold}%,
-				Applied color: ${progressElement.style.backgroundColor}`);
-		}
-	}
-
-	// Add a method to clear the completed files map when needed
-	// For example, when plugin is unloaded or when explicitly requested
-	clearCompletedFilesCache() {
-		this.completedFilesMap.clear();
-		if (this.plugin.settings.showDebugInfo) {
-			console.log("Cleared completed files cache");
-		}
-	}
-
-	/**
-	 * Check if content appears to be a Kanban board
-	 * This method is necessary for the shouldTreatAsKanban function
-	 */
-	isKanbanBoard(content: string): boolean {
-		// Look for specific indicators of a Kanban board
-
-		// Check for Kanban plugin metadata marker
-		if (content.includes("---\n\nkanban-plugin: basic")) {
-			return true;
-		}
-
-		// Check for typical Kanban structure - multiple columns with tasks
-		// Must have at least 2 columns with headers like "## Todo", "## In Progress", "## Done", etc.
-		const kanbanColumnHeaders = content.match(/^## .+?$/gm) || [];
-		if (kanbanColumnHeaders.length < 2) {
-			return false;
-		}
-
-		// Column names typically used in Kanban boards
-		const commonKanbanNames = [
-			"todo",
-			"to do",
-			"to-do",
-			"backlog",
-			"new",
-			"ideas",
-			"inbox",
-			"in progress",
-			"doing",
-			"working",
-			"current",
-			"ongoing",
-			"done",
-			"complete",
-			"completed",
-			"finished",
-			"blocked",
-			"waiting",
-			"on hold",
-			"review",
-		];
-
-		// Check if at least one column name matches common Kanban terminology
-		let foundKanbanName = false;
-		for (const header of kanbanColumnHeaders) {
-			const columnName = header.substring(3).toLowerCase().trim();
-			if (commonKanbanNames.some((name) => columnName.includes(name))) {
-				foundKanbanName = true;
-				break;
-			}
-		}
-
-		// Check for column with our target name specifically
-		const targetColumnExists = kanbanColumnHeaders.some(
-			(header) =>
-				header.substring(3).toLowerCase().trim() ===
-				this.plugin.settings.kanbanCompletedColumn.toLowerCase()
-		);
-
-		// If we find our target column name, it's very likely this is a Kanban board
-		if (targetColumnExists) {
-			return true;
-		}
-
-		// Check for items (-) within columns
-		// Split content by headers
-		const sections = content.split(/^## /m).slice(1);
-		let hasItems = false;
-
-		for (const section of sections) {
-			// Check for list items within the section
-			if (section.match(/^- .+/m)) {
-				hasItems = true;
-				break;
-			}
-		}
-
-		// For a file to be considered a Kanban board:
-		// 1. Must have at least 2 column headers
-		// 2. Must either have common Kanban column names OR have items in columns
-		return kanbanColumnHeaders.length >= 2 && (foundKanbanName || hasItems);
 	}
 
 	/**
@@ -1861,15 +1803,99 @@ class TaskProgressBarView extends ItemView {
 			items.push({ text: currentItem.trim() });
 		}
 	}
-}
 
-class TaskProgressBarSettingTab extends PluginSettingTab {
-	plugin: TaskProgressBarPlugin;
+	/**
+	 * Check if content appears to be a Kanban board
+	 * This method is necessary for the processKanbanBoards function
+	 */
+	private isKanbanBoard(content: string): boolean {
+		// Look for specific indicators of a Kanban board
+
+		// Check for Kanban plugin metadata marker
+		if (content.includes("---\n\nkanban-plugin: basic")) {
+			return true;
+		}
+
+		// Check for typical Kanban structure - multiple columns with tasks
+		// Must have at least 2 columns with headers like "## Todo", "## In Progress", "## Done", etc.
+		const kanbanColumnHeaders = content.match(/^## .+?$/gm) || [];
+		if (kanbanColumnHeaders.length < 2) {
+			return false;
+		}
+
+		// Column names typically used in Kanban boards
+		const commonKanbanNames = [
+			"todo",
+			"to do",
+			"to-do",
+			"backlog",
+			"new",
+			"ideas",
+			"inbox",
+			"in progress",
+			"doing",
+			"working",
+			"current",
+			"ongoing",
+			"done",
+			"complete",
+			"completed",
+			"finished",
+			"blocked",
+			"waiting",
+			"on hold",
+			"review",
+		];
+
+		// Check if at least one column name matches common Kanban terminology
+		let foundKanbanName = false;
+		for (const header of kanbanColumnHeaders) {
+			const columnName = header.substring(3).toLowerCase().trim();
+			if (commonKanbanNames.some((name) => columnName.includes(name))) {
+				foundKanbanName = true;
+				break;
+			}
+		}
+
+		// Check for column with our target name specifically
+		const targetColumnExists = kanbanColumnHeaders.some(
+			(header) =>
+				header.substring(3).toLowerCase().trim() ===
+				this.plugin.settings.kanbanCompletedColumn.toLowerCase()
+		);
+
+		// If we find our target column name, it's very likely this is a Kanban board
+		if (targetColumnExists) {
+			return true;
+		}
+
+		// Check for items (-) within columns
+		// Split content by headers
+		const sections = content.split(/^## /m).slice(1);
+		let hasItems = false;
+
+		for (const section of sections) {
+			// Check for list items within the section
+			if (section.match(/^- .+/m)) {
+				hasItems = true;
+				break;
+			}
+		}
+
+		// For a file to be considered a Kanban board:
+		// 1. Must have at least 2 column headers
+		// 2. Must either have common Kanban column names OR have items in columns
+		return kanbanColumnHeaders.length >= 2 && (foundKanbanName || hasItems);
+	}
+}	
+
+class TaskProgressBarSettingTab extends PluginSettingTab { 
+	plugin: TaskProgressBarPlugin;	
 
 	constructor(app: App, plugin: TaskProgressBarPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
-	}
+	}		
 
 	display(): void {
 		const { containerEl } = this;

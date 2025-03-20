@@ -1,7 +1,7 @@
 {
 	"id": "progress-tracker",
 	"name": "ProgressTracker",
-	"version": "1.0.0",
+	"version": "2.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Track task completion with a visual progress bar in your sidebar",
 	"author": "VN",
