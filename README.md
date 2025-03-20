@@ -12,7 +12,7 @@ Progress Tracker is an Obsidian plugin that visualizes your task completion prog
 
 ## Screenshots
 
-![Progress Tracker Main View](Screenshot.png)
+![Progress Tracker Main View](Screenshot.jpg)
 
 ## How It Works
 
