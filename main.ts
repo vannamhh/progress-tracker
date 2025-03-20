@@ -13,7 +13,7 @@ import {
 	Notice,
 } from "obsidian";
 
-// Định nghĩa interface cho DataviewAPI
+// Define DataviewAPI interface
 interface DataviewApi {
 	executeJs(
 		code: string,
@@ -22,32 +22,32 @@ interface DataviewApi {
 	): Promise<any>;
 	page(path: string): any;
 	pages(source: string): any[];
-	// Không sử dụng eval vì có thể không tồn tại trong một số phiên bản Dataview
+	// Not using eval as it might not exist in some Dataview versions
 }
 
-// Định nghĩa interface cho window object để truy cập Dataview plugin
+// Define window object interface to access Dataview plugin
 declare global {
 	interface Window {
 		DataviewAPI?: DataviewApi;
 	}
 }
 
-// Hàm helper để lấy Dataview API
+// Helper function to get Dataview API
 function getDataviewAPI(app: App): DataviewApi | null {
-	// Cách 1: Thông qua window object
+	// Method 1: Through window object
 	// @ts-ignore
 	if (window.DataviewAPI) {
 		return window.DataviewAPI;
 	}
 
-	// Cách 2: Thông qua app.plugins
+	// Method 2: Through app.plugins
 	// @ts-ignore
 	const dataviewPlugin = app.plugins?.plugins?.dataview;
 	if (dataviewPlugin && dataviewPlugin.api) {
 		return dataviewPlugin.api;
 	}
 
-	// Cách 3: Kiểm tra xem plugin có được enable không
+	// Method 3: Check if plugin is enabled
 	// @ts-ignore
 	if (app.plugins.enabledPlugins.has("dataview")) {
 		console.log("Dataview plugin is enabled but API is not available yet");
@@ -59,7 +59,7 @@ function getDataviewAPI(app: App): DataviewApi | null {
 }
 
 interface TaskProgressBarSettings {
-	mySetting: string; // Có vẻ không được sử dụng - có thể loại bỏ trong tương lai
+	mySetting: string; // Appears unused - could be removed in the future
 	showDebugInfo: boolean;
 	progressColorScheme: "default" | "red-orange-green" | "custom";
 	lowProgressColor: string;
@@ -148,7 +148,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new TaskProgressBarSettingTab(this.app, this));
 
-		// Kiểm tra Dataview API và thiết lập interval để kiểm tra lại nếu chưa có
+		 // Check Dataview API and set up interval to check again if not found
 		this.checkDataviewAPI();
 
 		// Register event to update progress bar when file changes
@@ -175,10 +175,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 				"editor-change",
 				debounce(async (editor, view) => {
 					if (view instanceof MarkdownView && this.sidebarView) {
-						// Lấy nội dung hiện tại của editor
+						// Get current editor content
 						const content = editor.getValue();
 
-						// Kiểm tra nếu nội dung thay đổi và có chứa task hoặc nội dung cũ có chứa task
+						// Check if content has changed and contains tasks or old content contains tasks
 						if (
 							content.includes("- [") ||
 							content.includes("- [ ]") ||
@@ -187,18 +187,18 @@ export default class TaskProgressBarPlugin extends Plugin {
 							this.lastFileContent.includes("- [ ]") ||
 							this.lastFileContent.includes("- [x]")
 						) {
-							// Cập nhật ngay lập tức
+							// Update immediately
 							if (this.lastActiveFile) {
-								// Cập nhật nội dung file cuối cùng trước khi kiểm tra thay đổi
+								// Update last file content before checking changes
 								this.lastActiveFile = view.file;
 
-								// Cập nhật thanh tiến trình ngay lập tức
+								// Update progress bar immediately
 								this.sidebarView.updateProgressBar(
 									view.file,
 									content
 								);
 
-								// Sau đó mới cập nhật nội dung file cuối cùng
+								// Then update last file content
 								this.lastFileContent = content;
 							}
 						}
@@ -207,13 +207,13 @@ export default class TaskProgressBarPlugin extends Plugin {
 			) // Use configurable delay
 		);
 
-		// Lắng nghe sự kiện keydown để phát hiện khi người dùng nhập task mới hoặc check/uncheck task
+		// Listen for keydown events to detect when user enters new tasks or checks/unchecks tasks
 		this.registerDomEvent(document, "keydown", (evt: KeyboardEvent) => {
-			// Kiểm tra xem có đang trong editor không
+			// Check if we're in the editor
 			const activeView =
 				this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (activeView && activeView.getMode() === "source") {
-				// Cập nhật ngay lập tức khi nhấn các phím liên quan đến task
+				// Update immediately when pressing keys related to tasks
 				if (
 					[
 						"Enter",
@@ -225,7 +225,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						"Delete",
 					].includes(evt.key)
 				) {
-					// Cập nhật ngay lập tức
+					// Update immediately
 					setTimeout(() => {
 						const content = activeView.editor.getValue();
 						if (
@@ -235,7 +235,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						) {
 							this.lastActiveFile = activeView.file;
 
-							// Cập nhật thanh tiến trình ngay lập tức
+							// Update progress bar immediately
 							if (this.sidebarView) {
 								this.sidebarView.updateProgressBar(
 									activeView.file,
@@ -243,7 +243,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 								);
 							}
 
-							// Sau đó mới cập nhật nội dung file cuối cùng
+							// Then update last file content
 							this.lastFileContent = content;
 						}
 					}, this.settings.keyboardInputDelay); // Use configurable delay
@@ -251,35 +251,35 @@ export default class TaskProgressBarPlugin extends Plugin {
 			}
 		});
 
-		// Lắng nghe sự kiện click trong editor để phát hiện khi task được check/uncheck
+		// Listen for click events in the editor to detect when tasks are checked/unchecked
 		this.registerDomEvent(document, "click", (evt: MouseEvent) => {
 			const target = evt.target as HTMLElement;
 
-			// Kiểm tra xem click có phải vào checkbox của task không
+			// Check if click is on a task checkbox
 			if (
 				target &&
 				target.tagName === "INPUT" &&
 				target.classList.contains("task-list-item-checkbox")
 			) {
-				// Đợi một chút để Obsidian cập nhật trạng thái task trong file
+				// Wait a bit for Obsidian to update the task state in the file
 				setTimeout(async () => {
 					const activeFile = this.app.workspace.getActiveFile();
 					if (activeFile && this.sidebarView) {
-						// Đọc nội dung file hiện tại
+						// Read current file content
 						const content = await this.app.vault.read(activeFile);
 
-						// Cập nhật thanh tiến trình ngay lập tức
+						// Update progress bar immediately
 						this.lastActiveFile = activeFile;
 						this.sidebarView.updateProgressBar(activeFile, content);
 
-						// Sau đó mới cập nhật nội dung file cuối cùng
+						// Then update last file content
 						this.lastFileContent = content;
 					}
 				}, this.settings.checkboxClickDelay); // Use configurable delay
 			}
 		});
 
-		// Activate view when plugin loads - đợi một chút để Obsidian khởi động hoàn toàn
+		// Activate view when plugin loads - wait a bit for Obsidian to fully start
 		setTimeout(() => {
 			this.activateView();
 
@@ -320,33 +320,33 @@ export default class TaskProgressBarPlugin extends Plugin {
 		});
 	}
 
-	// Kiểm tra Dataview API và thiết lập interval để kiểm tra lại nếu chưa có
+	// Check Dataview API and set up interval to check again if not found
 	checkDataviewAPI() {
-		// Kiểm tra ngay lập tức
+		// Check immediately
 		this.dvAPI = getDataviewAPI(this.app);
 
-		// Nếu không tìm thấy, thiết lập interval để kiểm tra lại
+		// If not found, set up interval to check again
 		if (!this.dvAPI) {
 			this.dataviewCheckInterval = window.setInterval(() => {
 				this.dvAPI = getDataviewAPI(this.app);
 				if (this.dvAPI) {
 					console.log("Dataview API found");
-					// Nếu tìm thấy, xóa interval
+					// If found, clear interval
 					if (this.dataviewCheckInterval) {
 						clearInterval(this.dataviewCheckInterval);
 						this.dataviewCheckInterval = null;
 					}
 
-					// Cập nhật sidebar nếu đang mở
+					// Update sidebar if open
 					if (this.sidebarView && this.lastActiveFile) {
 						this.sidebarView.updateProgressBar(this.lastActiveFile);
 					}
 				}
-			}, 2000); // Kiểm tra mỗi 2 giây
+			}, 2000); // Check every 2 seconds
 		}
 	}
 
-	// Cập nhật nội dung file cuối cùng
+	// Update last file content
 	async updateLastFileContent(file: TFile) {
 		if (file) {
 			this.lastFileContent = await this.app.vault.read(file);
@@ -365,14 +365,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 			}
 
 			// Otherwise, create a new leaf in the left sidebar
-			// Kiểm tra xem workspace đã sẵn sàng chưa
+			// Check if workspace is ready
 			if (!workspace.leftSplit) {
 				console.log("Workspace not ready yet, retrying in 500ms");
 				setTimeout(() => this.activateView(), 500);
 				return;
 			}
 
-			// Sử dụng getLeaf thay vì createLeaf
+			// Use getLeaf instead of createLeaf
 			const leaf = workspace.getLeftLeaf(false);
 			if (leaf) {
 				await leaf.setViewState({
@@ -392,7 +392,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 	}
 
 	onunload() {
-		// Xóa interval nếu có
+		// Clear interval if it exists
 		if (this.dataviewCheckInterval) {
 			clearInterval(this.dataviewCheckInterval);
 			this.dataviewCheckInterval = null;
@@ -521,7 +521,7 @@ class TaskProgressBarView extends ItemView {
 		// Track the update time for this file
 		this.lastFileUpdateMap.set(file.path, Date.now());
 
-		// Tránh cập nhật quá nhanh
+		// Avoid updating too quickly
 		const now = Date.now();
 		if (!isInitialLoad && now - this.lastUpdateTime < 100) return;
 		this.lastUpdateTime = now;
@@ -541,13 +541,13 @@ class TaskProgressBarView extends ItemView {
 			this.initialLoadComplete = true;
 		}
 
-		// Thêm class để hiển thị animation chỉ khi cài đặt showUpdateAnimation được bật
+		// Add class to show animation only when showUpdateAnimation setting is enabled
 		if (this.plugin.settings.showUpdateAnimation) {
 			progressContainer.classList.add("updating");
 		}
 
 		try {
-			// Cập nhật ngay lập tức nếu có nội dung được cung cấp
+			// Update immediately if content is provided
 			if (content) {
 				if (!this.hasTasksInContent(content)) {
 					// Only clear if not already showing "no tasks" message
@@ -567,7 +567,7 @@ class TaskProgressBarView extends ItemView {
 					);
 				}
 			} else {
-				// Đọc nội dung file
+				// Read file content
 				const fileContent = await this.plugin.app.vault.read(file);
 
 				if (!this.hasTasksInContent(fileContent)) {
@@ -598,7 +598,7 @@ class TaskProgressBarView extends ItemView {
 				text: `Error updating progress bar: ${error.message}`,
 			});
 		} finally {
-			// Xóa class sau khi cập nhật xong, chỉ khi animation được bật
+			// Remove class after update completes, only if animation is enabled
 			if (this.plugin.settings.showUpdateAnimation) {
 				setTimeout(() => {
 					progressContainer.classList.remove("updating");
@@ -619,7 +619,7 @@ class TaskProgressBarView extends ItemView {
 		);
 	}
 
-	// Phương thức tạo thanh tiến trình từ nội dung string
+	// Method to create progress bar from string content
 	async createProgressBarFromString(
 		container: HTMLElement,
 		content: string,
@@ -649,7 +649,7 @@ class TaskProgressBarView extends ItemView {
 				return;
 			}
 
-			// Sử dụng regex chính xác hơn để đếm task
+			// Use more accurate regex to count tasks
 			const incompleteTasks = (content.match(/- \[ \]/g) || []).length;
 			const completedTasks = (content.match(/- \[x\]/gi) || []).length;
 			let totalTasks = incompleteTasks + completedTasks;
@@ -841,7 +841,7 @@ class TaskProgressBarView extends ItemView {
 
 		// If using default color scheme, let CSS handle it
 		if (settings.progressColorScheme === "default") {
-			// Xóa bất kỳ màu inline nào đã được đặt trước đó
+			// Remove any previously set inline colors
 			progressElement.style.backgroundColor = "";
 			return;
 		}
@@ -849,16 +849,16 @@ class TaskProgressBarView extends ItemView {
 		// Apply custom color based on percentage
 		let newColor = "";
 		if (percentage === 100) {
-			// Hoàn thành - màu xanh lá
+			// Complete - green
 			newColor = settings.completeProgressColor;
 		} else if (percentage >= settings.mediumProgressThreshold) {
-			// Tiến độ cao (66-99%) - màu xanh dương
+			// High progress (66-99%) - blue
 			newColor = settings.highProgressColor;
 		} else if (percentage >= settings.lowProgressThreshold) {
-			// Tiến độ trung bình (34-65%) - màu cam/vàng
+			// Medium progress (34-65%) - orange/yellow
 			newColor = settings.mediumProgressColor;
 		} else {
-			// Tiến độ thấp (0-33%) - màu đỏ
+			// Low progress (0-33%) - red
 			newColor = settings.lowProgressColor;
 		}
 
@@ -867,7 +867,7 @@ class TaskProgressBarView extends ItemView {
 			progressElement.style.backgroundColor = newColor;
 		}
 
-		// Thêm debug log nếu cần
+		// Add debug log if needed
 		if (this.plugin.settings.showDebugInfo) {
 			console.log(`Applied color for ${percentage}%: 
 				Color scheme: ${settings.progressColorScheme},
@@ -1904,7 +1904,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h2", { text: "Task Progress Bar Settings" });
 
-		// Thêm thông tin về trạng thái Dataview
+		// Add Dataview status information
 		const dataviewStatus = containerEl.createDiv({
 			cls: "dataview-status",
 		});
@@ -1919,7 +1919,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				cls: "dataview-unavailable",
 			});
 
-			// Thêm nút để kiểm tra lại Dataview
+			// Add button to check for Dataview again
 			const checkButton = dataviewStatus.createEl("button", {
 				text: "Check for Dataview",
 				cls: "mod-cta",
@@ -1965,10 +1965,10 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 						this.plugin.settings.showDebugInfo = value;
 						await this.plugin.saveSettings();
 
-						// Cập nhật sidebar nếu đang mở - sử dụng phương thức public
+						// Update sidebar if open - use public method
 						const currentFile = this.app.workspace.getActiveFile();
 						if (currentFile) {
-							// Sử dụng phương thức public để cập nhật UI
+							// Use public method to update UI
 							this.plugin.checkDataviewAPI();
 						}
 					})
@@ -2100,7 +2100,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 							// Set preset colors if red-orange-green is selected
 							if (value === "red-orange-green") {
-								// Đặt lại các giá trị màu sắc và ngưỡng
+								// Reset color values and thresholds
 								this.plugin.settings.lowProgressColor =
 									"#e06c75"; // Red
 								this.plugin.settings.mediumProgressColor =
@@ -2110,12 +2110,12 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 								this.plugin.settings.completeProgressColor =
 									"#98c379"; // Green
 
-								// Đặt lại các ngưỡng
+								// Reset thresholds
 								this.plugin.settings.lowProgressThreshold = 30;
 								this.plugin.settings.mediumProgressThreshold = 60;
 								this.plugin.settings.highProgressThreshold = 99;
 
-								// Hiển thị thông báo để xác nhận thay đổi
+								// Show notice to confirm changes
 								new Notice(
 									"Applied Red-Orange-Blue-Green color scheme"
 								);
