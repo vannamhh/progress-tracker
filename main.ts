@@ -59,7 +59,7 @@ function getDataviewAPI(app: App): DataviewApi | null {
 }
 
 interface TaskProgressBarSettings {
-	mySetting: string;
+	mySetting: string; // Có vẻ không được sử dụng - có thể loại bỏ trong tương lai
 	showDebugInfo: boolean;
 	progressColorScheme: "default" | "red-orange-green" | "custom";
 	lowProgressColor: string;
@@ -69,24 +69,24 @@ interface TaskProgressBarSettings {
 	lowProgressThreshold: number;
 	mediumProgressThreshold: number;
 	highProgressThreshold: number;
-	showUpdateAnimation: boolean; // Add new setting for animation toggle
-	updateAnimationDelay: number; // Add animation delay setting
-	editorChangeDelay: number; // Add editor change delay
-	keyboardInputDelay: number; // Add keyboard input delay
-	checkboxClickDelay: number; // Add checkbox click delay
-	maxTabsHeight: string; // New setting for max-height of workspace tabs
-	autoUpdateMetadata: boolean; // Add new setting to control metadata auto-update feature
-	autoChangeStatus: boolean; // Control whether to change status
-	autoUpdateFinishedDate: boolean; // Control whether to update finished date
-	autoUpdateKanban: boolean; // Add new setting for Kanban board updates
-	kanbanCompletedColumn: string; // The name of the completed column in Kanban (deprecated, kept for backward compatibility)
-	statusTodo: string; // Status for 0% progress
-	statusInProgress: string; // Status for 1-99% progress
-	statusCompleted: string; // Status for 100% progress
-	kanbanAutoDetect: boolean; // Whether to auto-detect Kanban boards
-	kanbanSpecificFiles: string[]; // List of specific files/folders to treat as Kanban
-	kanbanExcludeFiles: string[]; // List of files/folders to exclude from Kanban detection
-	kanbanSyncWithStatus: boolean; // New setting to sync Kanban columns with status
+	showUpdateAnimation: boolean;
+	updateAnimationDelay: number;
+	editorChangeDelay: number;
+	keyboardInputDelay: number;
+	checkboxClickDelay: number;
+	maxTabsHeight: string;
+	autoUpdateMetadata: boolean;
+	autoChangeStatus: boolean;
+	autoUpdateFinishedDate: boolean;
+	autoUpdateKanban: boolean;
+	kanbanCompletedColumn: string; // Deprecated but kept for backward compatibility
+	statusTodo: string;
+	statusInProgress: string;
+	statusCompleted: string;
+	kanbanAutoDetect: boolean;
+	kanbanSpecificFiles: string[];
+	kanbanExcludeFiles: string[];
+	kanbanSyncWithStatus: boolean;
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
@@ -100,24 +100,24 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	lowProgressThreshold: 33,
 	mediumProgressThreshold: 66,
 	highProgressThreshold: 99,
-	showUpdateAnimation: true, // Default to true to maintain current behavior
-	updateAnimationDelay: 300, // Default animation delay (300ms)
-	editorChangeDelay: 500, // Default editor change delay (500ms)
-	keyboardInputDelay: 100, // Default keyboard input delay (10ms)
-	checkboxClickDelay: 200, // Default checkbox click delay (50ms)
-	maxTabsHeight: "auto", // Default to "auto"
-	autoUpdateMetadata: true, // Default to enabled
-	autoChangeStatus: true, // Default to enabled
-	autoUpdateFinishedDate: true, // Default to enabled
-	autoUpdateKanban: true, // Default to enabled
-	kanbanCompletedColumn: "Complete", // Default completed column name (deprecated)
-	statusTodo: "Todo", // Default status for 0% progress
-	statusInProgress: "In Progress", // Default status for 1-99% progress
-	statusCompleted: "Completed", // Default status for 100% progress
-	kanbanAutoDetect: true, // Default to auto-detect
-	kanbanSpecificFiles: [], // Empty array by default
-	kanbanExcludeFiles: [], // Empty array by default
-	kanbanSyncWithStatus: true, // Default to true for new installations
+	showUpdateAnimation: true,
+	updateAnimationDelay: 300,
+	editorChangeDelay: 500,
+	keyboardInputDelay: 100,
+	checkboxClickDelay: 200,
+	maxTabsHeight: "auto",
+	autoUpdateMetadata: true,
+	autoChangeStatus: true,
+	autoUpdateFinishedDate: true,
+	autoUpdateKanban: true,
+	kanbanCompletedColumn: "Complete", // Deprecated
+	statusTodo: "Todo",
+	statusInProgress: "In Progress",
+	statusCompleted: "Completed",
+	kanbanAutoDetect: true,
+	kanbanSpecificFiles: [],
+	kanbanExcludeFiles: [],
+	kanbanSyncWithStatus: true,
 };
 
 export default class TaskProgressBarPlugin extends Plugin {
@@ -344,35 +344,6 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}
 			}, 2000); // Kiểm tra mỗi 2 giây
 		}
-	}
-
-	// Kiểm tra xem trạng thái task có thay đổi không
-	hasTaskStatusChanged(newContent: string): boolean {
-		// Nếu chưa có nội dung cũ, coi như đã thay đổi
-		if (!this.lastFileContent) return true;
-
-		// Đếm số lượng task hoàn thành trong nội dung cũ và mới
-		// Sử dụng regex chính xác hơn để phát hiện task
-		const oldCompletedTasks = (
-			this.lastFileContent.match(/- \[x\]/gi) || []
-		).length;
-		const newCompletedTasks = (newContent.match(/- \[x\]/gi) || []).length;
-
-		// Đếm tổng số task trong nội dung cũ và mới
-		// Sử dụng regex chính xác hơn để phát hiện task chưa hoàn thành
-		const oldIncompleteTasks = (
-			this.lastFileContent.match(/- \[ \]/g) || []
-		).length;
-		const newIncompleteTasks = (newContent.match(/- \[ \]/g) || []).length;
-
-		const oldTotalTasks = oldIncompleteTasks + oldCompletedTasks;
-		const newTotalTasks = newIncompleteTasks + newCompletedTasks;
-
-		// Nếu số lượng task hoàn thành hoặc tổng số task thay đổi, coi như đã thay đổi
-		return (
-			oldCompletedTasks !== newCompletedTasks ||
-			oldTotalTasks !== newTotalTasks
-		);
 	}
 
 	// Cập nhật nội dung file cuối cùng
@@ -720,17 +691,19 @@ class TaskProgressBarView extends ItemView {
 			// Update status based on progress percentage (do this for all files)
 			let statusChanged = false;
 			if (this.plugin.settings.autoChangeStatus) {
-				statusChanged = await this.updateStatusBasedOnProgress(file, percentage);
+				statusChanged = await this.updateStatusBasedOnProgress(
+					file,
+					percentage
+				);
 			}
 
 			// Update Kanban boards based on task progress, regardless of whether it's 100%
 			// This ensures any status change gets reflected in the Kanban board
-			if (this.plugin.settings.autoUpdateKanban && (statusChanged || !this.completedFilesMap.has(file.path))) {
-				await this.updateKanbanBoards(
-					file,
-					completedCount,
-					totalTasks
-				);
+			if (
+				this.plugin.settings.autoUpdateKanban &&
+				(statusChanged || !this.completedFilesMap.has(file.path))
+			) {
+				await this.updateKanbanBoards(file, completedCount, totalTasks);
 			}
 
 			// Additional special handling for 100% completion
@@ -738,7 +711,7 @@ class TaskProgressBarView extends ItemView {
 				// Only update metadata and show notification if this file hasn't been marked as completed yet
 				if (!this.completedFilesMap.has(file.path)) {
 					await this.updateFileMetadata(file, content);
-					
+
 					// Mark this file as completed to avoid repeated updates
 					this.completedFilesMap.set(file.path, true);
 				}
@@ -768,7 +741,7 @@ class TaskProgressBarView extends ItemView {
 
 	/**
 	 * Handle Kanban board integration with files
-	 * Updates the position of a note card in Kanban boards when all tasks in the note are completed
+	 * Updates the position of a note card in Kanban boards when tasks are completed or status changes
 	 */
 	async updateKanbanBoards(
 		file: TFile,
@@ -777,32 +750,25 @@ class TaskProgressBarView extends ItemView {
 	) {
 		try {
 			// Only proceed if Kanban integration is enabled
-			if (!this.plugin.settings.autoUpdateKanban) {
+			if (!this.plugin.settings.autoUpdateKanban || totalTasks === 0) {
 				return;
 			}
 
 			// Calculate the current status based on progress
-			let currentStatus: string; 
-			
-			if (totalTasks === 0) {
-				// No tasks, don't update Kanban
-				return;
-			} else if (completedTasks === 0) {
-				currentStatus = this.plugin.settings.statusTodo;
-			} else if (completedTasks === totalTasks) {
-				currentStatus = this.plugin.settings.statusCompleted;
-			} else {
-				currentStatus = this.plugin.settings.statusInProgress;
-			}
+			let currentStatus = this.calculateStatusFromProgress(
+				completedTasks,
+				totalTasks
+			);
 
-			// Alternative method to get the status from the file's YAML frontmatter
-			// This is more accurate as it reflects the actual status in the file
+			// Get status from YAML frontmatter if available - more accurate
 			let statusFromYaml = await this.getStatusFromYaml(file);
 			if (statusFromYaml) {
 				currentStatus = statusFromYaml;
-				
+
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Using status from YAML: ${currentStatus} instead of calculated status`);
+					console.log(
+						`Using status from YAML: ${currentStatus} instead of calculated status`
+					);
 				}
 			}
 
@@ -810,50 +776,16 @@ class TaskProgressBarView extends ItemView {
 				console.log(
 					`Searching for Kanban boards that might contain ${file.path}...`
 				);
-				console.log(`Current status is: ${currentStatus} (${completedTasks}/${totalTasks} tasks)`);
+				console.log(
+					`Current status is: ${currentStatus} (${completedTasks}/${totalTasks} tasks)`
+				);
 			}
 
-			// Get all markdown files that might be Kanban boards
-			const markdownFiles = this.plugin.app.vault.getMarkdownFiles();
-
-			// Keep track of how many Kanban boards were updated
-			let updatedBoardCount = 0;
-
-			// Check each potential Kanban board file
-			for (const boardFile of markdownFiles) {
-				// Skip checking the current file itself
-				if (boardFile.path === file.path) continue;
-
-				// Read the content of the potential Kanban board
-				const boardContent = await this.plugin.app.vault.read(
-					boardFile
-				);
-
-				// Check if this file is a Kanban board
-				if (!this.isKanbanBoard(boardContent)) continue;
-
-				// Check if the board contains a reference to our file
-				if (!this.containsFileReference(boardContent, file)) continue;
-
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						`Found Kanban board "${boardFile.path}" that references "${file.path}"`
-					);
-				}
-
-				// Update the Kanban board by moving the card for this file to the appropriate column based on status
-				const updatedContent = await this.moveCardInKanbanBoard(
-					boardFile,
-					boardContent,
-					file,
-					currentStatus
-				);
-
-				// If the board was updated, increment the counter
-				if (updatedContent !== boardContent) {
-					updatedBoardCount++;
-				}
-			}
+			// Get and process Kanban boards
+			const updatedBoardCount = await this.processKanbanBoards(
+				file,
+				currentStatus
+			);
 
 			if (updatedBoardCount > 0) {
 				new Notice(
@@ -872,10 +804,78 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	/**
+	 * Calculate status based on task progress
+	 */
+	private calculateStatusFromProgress(
+		completedTasks: number,
+		totalTasks: number
+	): string {
+		if (totalTasks === 0) {
+			return this.plugin.settings.statusTodo;
+		} else if (completedTasks === 0) {
+			return this.plugin.settings.statusTodo;
+		} else if (completedTasks === totalTasks) {
+			return this.plugin.settings.statusCompleted;
+		} else {
+			return this.plugin.settings.statusInProgress;
+		}
+	}
+
+	/**
+	 * Process all Kanban boards that might reference the target file
+	 * Returns the number of boards that were updated
+	 */
+	private async processKanbanBoards(
+		file: TFile,
+		currentStatus: string
+	): Promise<number> {
+		// Get all markdown files that might be Kanban boards
+		const markdownFiles = this.plugin.app.vault.getMarkdownFiles();
+		let updatedBoardCount = 0;
+
+		// Check each potential Kanban board file
+		for (const boardFile of markdownFiles) {
+			// Skip checking the current file itself
+			if (boardFile.path === file.path) continue;
+
+			// Read the content of the potential Kanban board
+			const boardContent = await this.plugin.app.vault.read(boardFile);
+
+			// Skip if not a Kanban board or doesn't reference our file
+			if (
+				!this.isKanbanBoard(boardContent) ||
+				!this.containsFileReference(boardContent, file)
+			)
+				continue;
+
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(
+					`Found Kanban board "${boardFile.path}" that references "${file.path}"`
+				);
+			}
+
+			// Update the Kanban board by moving the card
+			const updatedContent = await this.moveCardInKanbanBoard(
+				boardFile,
+				boardContent,
+				file,
+				currentStatus
+			);
+
+			// If the board was updated, increment the counter
+			if (updatedContent !== boardContent) {
+				updatedBoardCount++;
+			}
+		}
+
+		return updatedBoardCount;
+	}
+
+	/**
 	 * Safely escape regex special characters in a string
 	 * Used by multiple methods that need to create regex patterns
 	 */
-	escapeRegExp(string: string): string {
+	private escapeRegExp(string: string): string {
 		if (!string) return "";
 		return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	}
@@ -883,7 +883,7 @@ class TaskProgressBarView extends ItemView {
 	/**
 	 * Check if a Kanban board content contains a reference to the given file
 	 */
-	containsFileReference(boardContent: string, file: TFile): boolean {
+	private containsFileReference(boardContent: string, file: TFile): boolean {
 		// Different ways a file might be referenced in a Kanban board
 		const filePath = file.path;
 		const filePathWithoutExtension = filePath.replace(/\.md$/, "");
@@ -913,131 +913,6 @@ class TaskProgressBarView extends ItemView {
 
 		// Return true if any pattern matches
 		return patterns.some((pattern) => pattern.test(boardContent));
-	}
-
-	/**
-	 * Parse Kanban board structure into columns and items with improved accuracy
-	 */
-	parseKanbanBoard(
-		content: string
-	): Record<string, { items: Array<{ text: string }> }> {
-		const kanban: Record<string, { items: Array<{ text: string }> }> = {};
-
-		// Check if this is a Kanban plugin file by looking for the YAML marker
-		const isKanbanPlugin = content.includes("---\n\nkanban-plugin: basic");
-
-		// Split content by H2 headers to get columns
-		const columnHeaders = content.match(/^## .+$/gm) || [];
-
-		if (columnHeaders.length < 1) {
-			return kanban;
-		}
-
-		// Extract content between column headers
-		for (let i = 0; i < columnHeaders.length; i++) {
-			const columnHeader = columnHeaders[i];
-			const columnName = columnHeader.substring(3).trim();
-
-			// Find the start position of this column
-			const columnStart = content.indexOf(columnHeader);
-			if (columnStart === -1) continue;
-
-			// Find the end position of this column (start of next column or end of file)
-			const nextColumnStart =
-				i < columnHeaders.length - 1
-					? content.indexOf(
-							columnHeaders[i + 1],
-							columnStart + columnHeader.length
-					  )
-					: content.length;
-
-			// Extract column content
-			const columnContent = content
-				.substring(columnStart + columnHeader.length, nextColumnStart)
-				.trim();
-
-			kanban[columnName] = { items: [] };
-
-			// Extract items from column content
-			if (isKanbanPlugin) {
-				// For Kanban plugin format
-				this.extractKanbanPluginItems(
-					columnContent,
-					kanban[columnName].items
-				);
-			} else {
-				// For regular markdown format
-				this.extractMarkdownItems(
-					columnContent,
-					kanban[columnName].items
-				);
-			}
-		}
-
-		if (this.plugin.settings.showDebugInfo) {
-			console.log(
-				"Parsed Kanban board with columns:",
-				Object.keys(kanban)
-			);
-			Object.entries(kanban).forEach(([column, data]) => {
-				console.log(
-					`Column "${column}" has ${data.items.length} items`
-				);
-			});
-		}
-
-		return kanban;
-	}
-
-	/**
-	 * Extract items from Kanban plugin format
-	 */
-	private extractKanbanPluginItems(
-		columnContent: string,
-		items: Array<{ text: string }>
-	) {
-		// Split by top-level list items (those that start with "- " at beginning of line)
-		const listItemsRaw = columnContent.split(/^- /m).slice(1);
-
-		for (const rawItem of listItemsRaw) {
-			const itemText = "- " + rawItem.trim();
-			items.push({ text: itemText });
-		}
-	}
-
-	/**
-	 * Extract items from regular markdown format
-	 */
-	private extractMarkdownItems(
-		columnContent: string,
-		items: Array<{ text: string }>
-	) {
-		// Each item starts with "- " at the beginning of a line
-		// And continues until the next item or end of content
-		let lines = columnContent.split("\n");
-		let currentItem = "";
-		let inItem = false;
-
-		for (const line of lines) {
-			if (line.trim().startsWith("- ")) {
-				// If we were already in an item, save the previous one
-				if (inItem) {
-					items.push({ text: currentItem.trim() });
-				}
-
-				// Start a new item
-				currentItem = line;
-				inItem = true;
-			} else if (inItem) {
-				// Continue current item
-				currentItem += "\n" + line;
-			}
-		}
-
-		// Add the last item if there is one
-		if (inItem) {
-			items.push({ text: currentItem.trim() });
-		}
 	}
 
 	// New method to update file metadata when tasks are completed
@@ -1152,7 +1027,10 @@ class TaskProgressBarView extends ItemView {
 
 	// Add a new method to update status based on progress percentage
 	// Modified to return whether the status was changed
-	async updateStatusBasedOnProgress(file: TFile, progressPercentage: number): Promise<boolean> {
+	async updateStatusBasedOnProgress(
+		file: TFile,
+		progressPercentage: number
+	): Promise<boolean> {
 		if (!file || !this.plugin.settings.autoChangeStatus) return false;
 
 		try {
@@ -1242,7 +1120,7 @@ class TaskProgressBarView extends ItemView {
 		} catch (error) {
 			console.error("Error updating status based on progress:", error);
 		}
-		
+
 		return false; // Return false if no status change occurred
 	}
 
@@ -1369,57 +1247,6 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	/**
-	 * Check if file should be treated as a Kanban board based on settings and content
-	 */
-	shouldTreatAsKanban(file: TFile, content: string): boolean {
-		const settings = this.plugin.settings;
-
-		// If Kanban feature is disabled, skip everything
-		if (!settings.autoUpdateKanban) {
-			return false;
-		}
-
-		// Check if file is in excluded list
-		const isExcluded = settings.kanbanExcludeFiles.some((excludePath) => {
-			// Check if it matches the file path directly
-			if (file.path === excludePath) return true;
-
-			// Check if file is in an excluded folder
-			if (excludePath.endsWith("/") && file.path.startsWith(excludePath))
-				return true;
-
-			return false;
-		});
-
-		if (isExcluded) {
-			if (this.plugin.settings.showDebugInfo) {
-				console.log(
-					`File ${file.path} is in the Kanban exclude list, skipping`
-				);
-			}
-			return false;
-		}
-
-		// Check if file is in the specific file list
-		const isSpecific = settings.kanbanSpecificFiles.some((includePath) => {
-			// Check if it matches the file path directly
-			if (file.path === includePath) return true;
-
-			// Check if file is in an included folder
-			if (includePath.endsWith("/") && file.path.startsWith(includePath))
-				return true;
-
-			return false;
-		});
-
-		// If file is explicitly included or auto-detection is enabled and the content looks like a Kanban board
-		return (
-			isSpecific ||
-			(settings.kanbanAutoDetect && this.isKanbanBoard(content))
-		);
-	}
-
-	/**
 	 * Check if content appears to be a Kanban board
 	 * This method is necessary for the shouldTreatAsKanban function
 	 */
@@ -1517,170 +1344,222 @@ class TaskProgressBarView extends ItemView {
 			const kanbanColumns = this.parseKanbanBoard(boardContent);
 			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Could not parse Kanban board structure in ${boardFile.path}`);
+					console.log(
+						`Could not parse Kanban board structure in ${boardFile.path}`
+					);
 				}
 				return boardContent;
 			}
-			
+
 			// Determine the target column name based on settings
 			let targetColumnName: string | undefined;
-			
+
 			if (this.plugin.settings.kanbanSyncWithStatus) {
 				// When syncing with status, use exact status name as the column name
 				targetColumnName = Object.keys(kanbanColumns).find(
-					name => name.toLowerCase() === targetStatus.toLowerCase()
+					(name) => name.toLowerCase() === targetStatus.toLowerCase()
 				);
-				
+
 				// If the exact status name isn't found, try a fuzzy match
 				if (!targetColumnName) {
-					targetColumnName = this.findClosestColumnName(Object.keys(kanbanColumns), targetStatus);
+					targetColumnName = this.findClosestColumnName(
+						Object.keys(kanbanColumns),
+						targetStatus
+					);
 				}
 			} else {
 				// Legacy behavior: When not syncing, use the completed column setting, but only for completed tasks
 				if (targetStatus === this.plugin.settings.statusCompleted) {
 					targetColumnName = Object.keys(kanbanColumns).find(
-						name => name.toLowerCase() === this.plugin.settings.kanbanCompletedColumn.toLowerCase()
+						(name) =>
+							name.toLowerCase() ===
+							this.plugin.settings.kanbanCompletedColumn.toLowerCase()
 					);
 				}
 			}
-			
+
 			// If no matching column found, log and return original content
 			if (!targetColumnName) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Could not find column for status "${targetStatus}" in Kanban board ${boardFile.path}`);
-					console.log(`Available columns: ${Object.keys(kanbanColumns).join(", ")}`);
+					console.log(
+						`Could not find column for status "${targetStatus}" in Kanban board ${boardFile.path}`
+					);
+					console.log(
+						`Available columns: ${Object.keys(kanbanColumns).join(
+							", "
+						)}`
+					);
 				}
 				return boardContent;
 			}
-			
+
 			if (this.plugin.settings.showDebugInfo) {
-				console.log(`Target column for status "${targetStatus}" is "${targetColumnName}"`);
+				console.log(
+					`Target column for status "${targetStatus}" is "${targetColumnName}"`
+				);
 			}
-			
+
 			// Look for the card containing reference to our file in each column
 			let cardMoved = false;
 			let newContent = boardContent;
-			
+
 			// Build file reference pattern options for searching
 			const filePath = fileToMove.path;
-			const filePathWithoutExtension = filePath.replace(/\.md$/, '');
+			const filePathWithoutExtension = filePath.replace(/\.md$/, "");
 			const fileName = fileToMove.basename;
-			
+
 			// Patterns to match different kinds of file references in cards
 			const fileRefPatterns = [
 				`\\[.*?\\]\\(${this.escapeRegExp(filePath)}\\)`,
-				`\\[\\[${this.escapeRegExp(filePathWithoutExtension)}(\\|.*?)?\\]\\]`,
-				`\\[\\[${this.escapeRegExp(fileName)}(\\|.*?)?\\]\\]`, 
+				`\\[\\[${this.escapeRegExp(
+					filePathWithoutExtension
+				)}(\\|.*?)?\\]\\]`,
+				`\\[\\[${this.escapeRegExp(fileName)}(\\|.*?)?\\]\\]`,
 				`\\b${this.escapeRegExp(filePath)}\\b`,
-				`\\b${this.escapeRegExp(fileName)}\\b`
+				`\\b${this.escapeRegExp(fileName)}\\b`,
 			];
-			
+
 			// Join patterns with OR for combined search
-			const fileRefRegex = new RegExp(fileRefPatterns.join('|'), 'i');
-			
+			const fileRefRegex = new RegExp(fileRefPatterns.join("|"), "i");
+
 			// Process each column
 			for (const columnName in kanbanColumns) {
 				// Skip the target column - we don't need to move items already there
-				if (columnName.toLowerCase() === targetColumnName.toLowerCase()) {
+				if (
+					columnName.toLowerCase() === targetColumnName.toLowerCase()
+				) {
 					continue;
 				}
-				
+
 				const column = kanbanColumns[columnName];
-				
+
 				// Check each card in the column
 				for (let i = 0; i < column.items.length; i++) {
 					const card = column.items[i];
-					
+
 					// Check if this card references our file
 					if (fileRefRegex.test(card.text)) {
 						if (this.plugin.settings.showDebugInfo) {
-							console.log(`Found card in column "${columnName}" that references file ${fileToMove.path}`);
+							console.log(
+								`Found card in column "${columnName}" that references file ${fileToMove.path}`
+							);
 						}
-						
+
 						// Remove this card from its current position
 						// Find this card's position in the file content
-						const columnRegex = new RegExp(`## ${this.escapeRegExp(columnName)}\\s*\\n`);
+						const columnRegex = new RegExp(
+							`## ${this.escapeRegExp(columnName)}\\s*\\n`
+						);
 						const columnMatch = newContent.match(columnRegex);
-						
+
 						if (!columnMatch) continue;
-						
+
 						const columnStart = columnMatch.index!;
-						const columnHeaderEnd = columnStart + columnMatch[0].length;
-						
+						const columnHeaderEnd =
+							columnStart + columnMatch[0].length;
+
 						// Find the next column or the end of file
 						const nextColumnRegex = /^## /gm;
 						nextColumnRegex.lastIndex = columnHeaderEnd;
-						const nextColumnMatch = nextColumnRegex.exec(newContent);
-						const columnEnd = nextColumnMatch ? nextColumnMatch.index : newContent.length;
-						
+						const nextColumnMatch =
+							nextColumnRegex.exec(newContent);
+						const columnEnd = nextColumnMatch
+							? nextColumnMatch.index
+							: newContent.length;
+
 						// Get this column's content
-						const columnContent = newContent.substring(columnHeaderEnd, columnEnd);
-						
+						const columnContent = newContent.substring(
+							columnHeaderEnd,
+							columnEnd
+						);
+
 						// Try to find the card in the column
-						const cleanCardText = this.escapeRegExp(card.text.trim());
-						const cardRegex = new RegExp(`(^|\\n)(${cleanCardText})(\\n|$)`);
+						const cleanCardText = this.escapeRegExp(
+							card.text.trim()
+						);
+						const cardRegex = new RegExp(
+							`(^|\\n)(${cleanCardText})(\\n|$)`
+						);
 						const cardMatch = columnContent.match(cardRegex);
-						
+
 						if (!cardMatch) {
 							if (this.plugin.settings.showDebugInfo) {
-								console.log(`Could not find card in column ${columnName}`);
+								console.log(
+									`Could not find card in column ${columnName}`
+								);
 							}
 							continue;
 						}
-						
+
 						// Calculate absolute positions in the whole content
-						const cardStart = columnHeaderEnd + cardMatch.index! + (cardMatch[1] === '\n' ? 1 : 0);
+						const cardStart =
+							columnHeaderEnd +
+							cardMatch.index! +
+							(cardMatch[1] === "\n" ? 1 : 0);
 						const cardEnd = cardStart + card.text.length;
-						
+
 						// Safety check - don't remove a card if our indices are wrong
-						if (cardEnd <= cardStart || cardStart < 0 || cardEnd > newContent.length) {
-							console.error(`Invalid card position: start=${cardStart}, end=${cardEnd}, contentLength=${newContent.length}`);
+						if (
+							cardEnd <= cardStart ||
+							cardStart < 0 ||
+							cardEnd > newContent.length
+						) {
+							console.error(
+								`Invalid card position: start=${cardStart}, end=${cardEnd}, contentLength=${newContent.length}`
+							);
 							continue;
 						}
-						
+
 						// Remove this card from its current column
 						const beforeCard = newContent.substring(0, cardStart);
 						const afterCard = newContent.substring(cardEnd);
-						
+
 						// Handle newlines correctly
 						newContent = beforeCard + afterCard;
-						
+
 						// Find the target column
-						const targetColumnRegex = new RegExp(`## ${this.escapeRegExp(targetColumnName)}\\s*\\n`);
-						const targetColumnMatch = newContent.match(targetColumnRegex);
-						
+						const targetColumnRegex = new RegExp(
+							`## ${this.escapeRegExp(targetColumnName)}\\s*\\n`
+						);
+						const targetColumnMatch =
+							newContent.match(targetColumnRegex);
+
 						if (!targetColumnMatch) continue;
-						
-						const targetInsertPosition = targetColumnMatch.index! + targetColumnMatch[0].length;
-						
+
+						const targetInsertPosition =
+							targetColumnMatch.index! +
+							targetColumnMatch[0].length;
+
 						// Insert the card at the beginning of the target column
-						newContent = 
-							newContent.substring(0, targetInsertPosition) + 
-							card.text + 
-							"\n" + 
+						newContent =
+							newContent.substring(0, targetInsertPosition) +
+							card.text +
+							"\n" +
 							newContent.substring(targetInsertPosition);
-						
+
 						cardMoved = true;
-						
+
 						if (this.plugin.settings.showDebugInfo) {
-							console.log(`Moved card for ${fileToMove.path} from "${columnName}" to "${targetColumnName}" in ${boardFile.path}`);
+							console.log(
+								`Moved card for ${fileToMove.path} from "${columnName}" to "${targetColumnName}" in ${boardFile.path}`
+							);
 						}
-						
+
 						// Break once we've found and moved the card
 						break;
 					}
 				}
-				
+
 				// If we've moved the card, no need to check other columns
 				if (cardMoved) break;
 			}
-			
+
 			// Update the file if changes were made
 			if (cardMoved && newContent !== boardContent) {
 				await this.plugin.app.vault.modify(boardFile, newContent);
 				return newContent;
 			}
-			
+
 			return boardContent;
 		} catch (error) {
 			console.error("Error moving card in Kanban board:", error);
@@ -1695,88 +1574,140 @@ class TaskProgressBarView extends ItemView {
 	 * Find the closest column name match for a given status
 	 * This helps when Kanban columns don't exactly match status names
 	 */
-	findClosestColumnName(columnNames: string[], targetStatus: string): string | undefined {
+	findClosestColumnName(
+		columnNames: string[],
+		targetStatus: string
+	): string | undefined {
 		const targetLower = targetStatus.toLowerCase();
-		
+
 		// Define common variants of status names and their corresponding column names
 		const statusVariants: Record<string, string[]> = {
-			"todo": ["to do", "todo", "backlog", "new", "not started", "pending", "open", "to-do"],
-			"in progress": ["progress", "doing", "working", "ongoing", "started", "in work", "active", "current", "wip"],
-			"completed": ["done", "complete", "finished", "closed", "resolved", "ready", "completed"]
+			todo: [
+				"to do",
+				"todo",
+				"backlog",
+				"new",
+				"not started",
+				"pending",
+				"open",
+				"to-do",
+			],
+			"in progress": [
+				"progress",
+				"doing",
+				"working",
+				"ongoing",
+				"started",
+				"in work",
+				"active",
+				"current",
+				"wip",
+			],
+			completed: [
+				"done",
+				"complete",
+				"finished",
+				"closed",
+				"resolved",
+				"ready",
+				"completed",
+			],
 		};
-		
+
 		// First try exact match (case-insensitive)
-		const exactMatch = columnNames.find(name => name.toLowerCase() === targetLower);
+		const exactMatch = columnNames.find(
+			(name) => name.toLowerCase() === targetLower
+		);
 		if (exactMatch) return exactMatch;
-		
+
 		// Special handling for common status values
 		if (targetLower === this.plugin.settings.statusTodo.toLowerCase()) {
 			for (const colName of columnNames) {
 				const colNameLower = colName.toLowerCase();
-				if (statusVariants["todo"].some(v => colNameLower.includes(v) || v === colNameLower)) {
+				if (
+					statusVariants["todo"].some(
+						(v) => colNameLower.includes(v) || v === colNameLower
+					)
+				) {
 					return colName;
 				}
 			}
-		} else if (targetLower === this.plugin.settings.statusInProgress.toLowerCase()) {
+		} else if (
+			targetLower === this.plugin.settings.statusInProgress.toLowerCase()
+		) {
 			for (const colName of columnNames) {
 				const colNameLower = colName.toLowerCase();
-				if (statusVariants["in progress"].some(v => colNameLower.includes(v) || v === colNameLower)) {
+				if (
+					statusVariants["in progress"].some(
+						(v) => colNameLower.includes(v) || v === colNameLower
+					)
+				) {
 					return colName;
 				}
 			}
-		} else if (targetLower === this.plugin.settings.statusCompleted.toLowerCase()) {
+		} else if (
+			targetLower === this.plugin.settings.statusCompleted.toLowerCase()
+		) {
 			for (const colName of columnNames) {
 				const colNameLower = colName.toLowerCase();
-				if (statusVariants["completed"].some(v => colNameLower.includes(v) || v === colNameLower)) {
+				if (
+					statusVariants["completed"].some(
+						(v) => colNameLower.includes(v) || v === colNameLower
+					)
+				) {
 					return colName;
 				}
 			}
 		}
-		
+
 		// Then try fuzzy variant matching if status is not a standard one
 		for (const [status, variants] of Object.entries(statusVariants)) {
-			if (variants.some(v => targetLower.includes(v) || v.includes(targetLower))) {
+			if (
+				variants.some(
+					(v) => targetLower.includes(v) || v.includes(targetLower)
+				)
+			) {
 				for (const colName of columnNames) {
 					const colNameLower = colName.toLowerCase();
-					if (variants.some(v => colNameLower.includes(v) || v.includes(colNameLower))) {
+					if (
+						variants.some(
+							(v) =>
+								colNameLower.includes(v) ||
+								v.includes(colNameLower)
+						)
+					) {
 						return colName;
 					}
 				}
 			}
 		}
-		
+
 		// If there's a direct word match, use that
 		for (const colName of columnNames) {
 			if (colName.toLowerCase() === targetLower) {
 				return colName;
 			}
 		}
-		
+
 		// If no matches are found, try to find any column with a partial match
 		for (const colName of columnNames) {
-			if (colName.toLowerCase().includes(targetLower) || 
-				targetLower.includes(colName.toLowerCase())) {
+			if (
+				colName.toLowerCase().includes(targetLower) ||
+				targetLower.includes(colName.toLowerCase())
+			) {
 				return colName;
 			}
 		}
-		
+
 		// If still no matches, and this is a "Todo" status with no matching column,
 		// return the first column as a likely match for the starting column
-		if (targetLower === this.plugin.settings.statusTodo.toLowerCase() && columnNames.length > 0) {
+		if (
+			targetLower === this.plugin.settings.statusTodo.toLowerCase() &&
+			columnNames.length > 0
+		) {
 			return columnNames[0]; // First column is often the "Todo" equivalent
 		}
-		
-		// If all else fails, use a column that seems most appropriate
-		if (columnNames.length > 0) {
-			for (const colName of columnNames) {
-				const lowerName = colName.toLowerCase();
-				// Common backlog/todo names
-				if (lowerName.includes("backlog") || lowerName.includes("todo") || lowerName.includes("to do")) {
-					return colName;
-				}
-			}
-		}
-		
+
 		// If no matches are found, return undefined
 		return undefined;
 	}
@@ -1789,21 +1720,146 @@ class TaskProgressBarView extends ItemView {
 			const content = await this.plugin.app.vault.read(file);
 			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
 			const yamlMatch = content.match(yamlRegex);
-			
+
 			if (!yamlMatch) return null;
-			
+
 			const yaml = yamlMatch[1];
 			const statusRegex = /status\s*:\s*([^\n]+)/i;
 			const statusMatch = yaml.match(statusRegex);
-			
+
 			if (statusMatch) {
 				return statusMatch[1].trim();
 			}
 		} catch (error) {
 			console.error("Error getting status from YAML:", error);
 		}
-		
+
 		return null;
+	}
+
+	/**
+	 * Parse Kanban board structure into columns and items with improved accuracy
+	 */
+	private parseKanbanBoard(
+		content: string
+	): Record<string, { items: Array<{ text: string }> }> {
+		const kanban: Record<string, { items: Array<{ text: string }> }> = {};
+
+		// Check if this is a Kanban plugin file by looking for the YAML marker
+		const isKanbanPlugin = content.includes("---\n\nkanban-plugin: basic");
+
+		// Split content by H2 headers to get columns
+		const columnHeaders = content.match(/^## .+$/gm) || [];
+
+		if (columnHeaders.length < 1) {
+			return kanban;
+		}
+
+		// Extract content between column headers
+		for (let i = 0; i < columnHeaders.length; i++) {
+			const columnHeader = columnHeaders[i];
+			const columnName = columnHeader.substring(3).trim();
+
+			// Find the start position of this column
+			const columnStart = content.indexOf(columnHeader);
+			if (columnStart === -1) continue;
+
+			// Find the end position of this column (start of next column or end of file)
+			const nextColumnStart =
+				i < columnHeaders.length - 1
+					? content.indexOf(
+							columnHeaders[i + 1],
+							columnStart + columnHeader.length
+					  )
+					: content.length;
+
+			// Extract column content
+			const columnContent = content
+				.substring(columnStart + columnHeader.length, nextColumnStart)
+				.trim();
+
+			kanban[columnName] = { items: [] };
+
+			// Extract items from column content
+			if (isKanbanPlugin) {
+				// For Kanban plugin format
+				this.extractKanbanPluginItems(
+					columnContent,
+					kanban[columnName].items
+				);
+			} else {
+				// For regular markdown format
+				this.extractMarkdownItems(
+					columnContent,
+					kanban[columnName].items
+				);
+			}
+		}
+
+		if (this.plugin.settings.showDebugInfo) {
+			console.log(
+				"Parsed Kanban board with columns:",
+				Object.keys(kanban)
+			);
+			Object.entries(kanban).forEach(([column, data]) => {
+				console.log(
+					`Column "${column}" has ${data.items.length} items`
+				);
+			});
+		}
+
+		return kanban;
+	}
+
+	/**
+	 * Extract items from Kanban plugin format
+	 */
+	private extractKanbanPluginItems(
+		columnContent: string,
+		items: Array<{ text: string }>
+	) {
+		// Split by top-level list items (those that start with "- " at beginning of line)
+		const listItemsRaw = columnContent.split(/^- /m).slice(1);
+
+		for (const rawItem of listItemsRaw) {
+			const itemText = "- " + rawItem.trim();
+			items.push({ text: itemText });
+		}
+	}
+
+	/**
+	 * Extract items from regular markdown format
+	 */
+	private extractMarkdownItems(
+		columnContent: string,
+		items: Array<{ text: string }>
+	) {
+		// Each item starts with "- " at the beginning of a line
+		// And continues until the next item or end of content
+		let lines = columnContent.split("\n");
+		let currentItem = "";
+		let inItem = false;
+
+		for (const line of lines) {
+			if (line.trim().startsWith("- ")) {
+				// If we were already in an item, save the previous one
+				if (inItem) {
+					items.push({ text: currentItem.trim() });
+				}
+
+				// Start a new item
+				currentItem = line;
+				inItem = true;
+			} else if (inItem) {
+				// Continue current item
+				currentItem += "\n" + line;
+			}
+		}
+
+		// Add the last item if there is one
+		if (inItem) {
+			items.push({ text: currentItem.trim() });
+		}
 	}
 }
 
@@ -2472,7 +2528,8 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 						toggle
 							.setValue(this.plugin.settings.kanbanSyncWithStatus)
 							.onChange(async (value) => {
-								this.plugin.settings.kanbanSyncWithStatus = value;
+								this.plugin.settings.kanbanSyncWithStatus =
+									value;
 								await this.plugin.saveSettings();
 								this.display(); // Refresh settings
 							})
@@ -2530,22 +2587,22 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				const infoDiv = containerEl.createDiv({
 					cls: "kanban-info",
 					attr: {
-						style: "background: var(--background-secondary-alt); padding: 10px; border-radius: 5px; margin-top: 10px;"
-					}
+						style: "background: var(--background-secondary-alt); padding: 10px; border-radius: 5px; margin-top: 10px;",
+					},
 				});
-				
+
 				infoDiv.createEl("p", {
 					text: "ℹ️ Column naming tip:",
 					attr: {
-						style: "font-weight: bold; margin: 0 0 5px 0;"
-					}
+						style: "font-weight: bold; margin: 0 0 5px 0;",
+					},
 				});
-				
+
 				infoDiv.createEl("p", {
 					text: `To get the best results, name your Kanban columns to match the status values: "${this.plugin.settings.statusTodo}", "${this.plugin.settings.statusInProgress}", and "${this.plugin.settings.statusCompleted}".`,
 					attr: {
-						style: "margin: 0;"
-					}
+						style: "margin: 0;",
+					},
 				});
 
 				// Keep the remaining Kanban settings (specific files, exclude files, file picker)
