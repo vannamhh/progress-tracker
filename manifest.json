@@ -3,7 +3,7 @@
 	"name": "ProgressTracker",
 	"version": "1.1.0",
 	"minAppVersion": "0.15.0",
-	"description": "Track task completion with a visual progress bar in your sidebar",
+	"description": "Track task completion with a visual progress bar in your sidebar, auto update column Kanban",
 	"author": "VN",
 	"authorUrl": "https://github.com/vannamhh/",
 	"fundingUrl": "https://github.com/vannamhh/",
