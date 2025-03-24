@@ -11,6 +11,7 @@ import {
 	MarkdownPostProcessorContext,
 	debounce,
 	Notice,
+	SuggestModal  // Add this import
 } from "obsidian";
 
 // Define DataviewAPI interface
@@ -87,6 +88,9 @@ interface TaskProgressBarSettings {
 	kanbanSpecificFiles: string[];
 	kanbanExcludeFiles: string[];
 	kanbanSyncWithStatus: boolean;
+	autoAddToKanban: boolean;
+	autoAddKanbanBoard: string;
+	autoAddKanbanColumn: string;
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
@@ -118,6 +122,9 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	kanbanSpecificFiles: [],
 	kanbanExcludeFiles: [],
 	kanbanSyncWithStatus: true,
+	autoAddToKanban: false,
+	autoAddKanbanBoard: "",
+	autoAddKanbanColumn: "Todo",
 };
 
 export default class TaskProgressBarPlugin extends Plugin {
@@ -397,9 +404,6 @@ export default class TaskProgressBarPlugin extends Plugin {
 			clearInterval(this.dataviewCheckInterval);
 			this.dataviewCheckInterval = null;
 		}
-
-		// Detach the view when plugin unloads
-		this.app.workspace.detachLeavesOfType("progress-tracker");
 
 		// Clear any in-memory data
 		if (this.sidebarView) {
@@ -730,6 +734,16 @@ class TaskProgressBarView extends ItemView {
 				if (this.completedFilesMap.has(file.path)) {
 					this.completedFilesMap.delete(file.path);
 				}
+			}
+
+			 // Auto-add to Kanban board if enabled and file has tasks
+			if (
+				this.plugin.settings.autoAddToKanban &&
+				this.plugin.settings.autoAddKanbanBoard &&
+				totalTasks > 0 &&
+				!this.completedFilesMap.has(file.path)
+			) {
+				await this.addFileToKanbanBoard(file);
 			}
 
 			// Check if we already have progress elements
@@ -1186,6 +1200,16 @@ class TaskProgressBarView extends ItemView {
 		file: TFile,
 		currentStatus: string
 	): Promise<number> {
+			// Skip plugin files and obvious Kanban files to avoid self-reference issues
+		const filePath = file.path.toLowerCase();
+		if (filePath.includes('.obsidian/plugins/progress-tracker') || 
+			filePath.includes('kanban')) {
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(`Skipping plugin or kanban file for kanban processing: ${file.path}`);
+			}
+			return 0;
+		}
+
 		// Get all markdown files that might be Kanban boards
 		const markdownFiles = this.plugin.app.vault.getMarkdownFiles();
 		let updatedBoardCount = 0;
@@ -1886,6 +1910,140 @@ class TaskProgressBarView extends ItemView {
 		// 1. Must have at least 2 column headers
 		// 2. Must either have common Kanban column names OR have items in columns
 		return kanbanColumnHeaders.length >= 2 && (foundKanbanName || hasItems);
+	}
+
+	/**
+	 * Add a file to the specified Kanban board if it's not already there
+	 */
+	async addFileToKanbanBoard(file: TFile): Promise<boolean> {
+		try {
+			// Skip if auto-add setting is disabled or board path is empty
+			if (!this.plugin.settings.autoAddToKanban || !this.plugin.settings.autoAddKanbanBoard) {
+				return false;
+			}
+
+				// Skip plugin files and Kanban board files to avoid self-reference
+			const filePath = file.path.toLowerCase();
+			if (filePath.includes('.obsidian/plugins/progress-tracker') || 
+				filePath.includes('kanban') || 
+				filePath === this.plugin.settings.autoAddKanbanBoard) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Skipping plugin or kanban file: ${file.path}`);
+				}
+				return false;
+			}
+
+			// Get the Kanban board file
+			const boardPath = this.plugin.settings.autoAddKanbanBoard;
+			const kanbanFile = this.plugin.app.vault.getAbstractFileByPath(boardPath);
+			
+			if (!kanbanFile || !(kanbanFile instanceof TFile)) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Could not find Kanban board at path: ${boardPath}`);
+				}
+				return false;
+			}
+
+				// Skip if trying to add the kanban board to itself
+			if (file.path === kanbanFile.path) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Skipping adding kanban board to itself: ${file.path}`);
+				}
+				return false;
+			}
+
+			// Read the board content
+			const boardContent = await this.plugin.app.vault.read(kanbanFile as TFile);
+			
+			// Skip if this is not a Kanban board
+			if (!this.isKanbanBoard(boardContent)) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`File at path ${boardPath} is not a Kanban board`);
+				}
+				return false;
+			}
+			
+			// Check if the file is already referenced in the board
+			if (this.containsFileReference(boardContent, file)) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`File ${file.path} is already in Kanban board ${boardPath}`);
+				}
+				return false;
+			}
+			
+			// Get the target column name
+			const targetColumn = this.plugin.settings.autoAddKanbanColumn || "Todo";
+			
+			// Parse the Kanban board to find the column
+			const kanbanColumns = this.parseKanbanBoard(boardContent);
+			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Could not parse Kanban board structure in ${boardPath}`);
+				}
+				return false;
+			}
+			
+			// Find the exact or closest column match
+			let targetColumnName = Object.keys(kanbanColumns).find(
+				(name) => name.toLowerCase() === targetColumn.toLowerCase()
+			);
+			
+			if (!targetColumnName) {
+				targetColumnName = this.findClosestColumnName(
+					Object.keys(kanbanColumns),
+					targetColumn
+				);
+			}
+			
+			if (!targetColumnName) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Could not find column "${targetColumn}" in Kanban board ${boardPath}`
+					);
+				}
+				return false;
+			}
+			
+			// Find the position to insert the card
+			const columnRegex = new RegExp(
+				`## ${this.escapeRegExp(targetColumnName)}\\s*\\n`
+			);
+			const columnMatch = boardContent.match(columnRegex);
+			
+			if (!columnMatch) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Could not find column "${targetColumnName}" in Kanban board content`
+					);
+				}
+				return false;
+			}
+			
+			const insertPosition = columnMatch.index! + columnMatch[0].length;
+			
+			// Create card text with link to the file
+			const cardText = `- [[${file.basename}]]\n`;
+			
+			// Insert the card
+			const newContent = 
+				boardContent.substring(0, insertPosition) +
+				cardText +
+				boardContent.substring(insertPosition);
+			
+			// Update the file
+			await this.plugin.app.vault.modify(kanbanFile as TFile, newContent);
+			
+			// Show notice
+			new Notice(`Added ${file.basename} to "${targetColumnName}" column in ${kanbanFile.basename}`);
+			
+			return true;
+		} catch (error) {
+			console.error("Error adding file to Kanban board:", error);
+			if (this.plugin.settings.showDebugInfo) {
+				console.error("Error details:", error);
+			}
+			return false;
+		}
 	}
 }	
 
@@ -2635,5 +2793,129 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				// ...existing code...
 			}
 		}
+
+		// Add new section for auto-add to Kanban
+		new Setting(containerEl)
+			.setName("Auto-add files to Kanban board")
+			.setDesc(
+				"Automatically add files with tasks to a specified Kanban board if they're not already there"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoAddToKanban)
+					.onChange(async (value) => {
+						this.plugin.settings.autoAddToKanban = value;
+						await this.plugin.saveSettings();
+						// Refresh to show/hide related settings
+						this.display();
+					})
+			);
+
+		if (this.plugin.settings.autoAddToKanban) {
+			new Setting(containerEl)
+				.setName("Target Kanban board")
+				.setDesc("The path to the Kanban board where files should be added")
+				.addText((text) =>
+					text
+						.setPlaceholder("path/to/kanban.md")
+						.setValue(this.plugin.settings.autoAddKanbanBoard)
+						.onChange(async (value) => {
+							this.plugin.settings.autoAddKanbanBoard = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Add file picker button
+			containerEl.createEl("div", {
+				text: "Select Kanban board file:",
+				attr: { style: "margin-left: 36px; margin-bottom: 8px;" }
+			});
+
+			const filePickerContainer = containerEl.createEl("div", {
+				attr: { style: "margin-left: 36px; margin-bottom: 12px;" }
+			});
+
+			const filePickerButton = filePickerContainer.createEl("button", {
+				text: "Browse...",
+				cls: "mod-cta",
+			});
+
+			filePickerButton.addEventListener("click", async () => {
+				// Remove the problematic code that references app.plugins
+				try {
+					const modal = new FileSuggestModal(this.app, this.plugin);
+					modal.onChooseItem = (file: TFile) => {
+						if (file) {
+							this.plugin.settings.autoAddKanbanBoard = file.path;
+							this.plugin.saveSettings().then(() => {
+								this.display();
+							});
+						}
+					};
+					modal.open();
+				} catch (error) {
+					new Notice("Error opening file picker. Please enter the path manually.");
+					console.error("File picker error:", error);
+				}
+			});
+
+			new Setting(containerEl)
+				.setName("Target column")
+				.setDesc("The column where new files should be added (e.g., 'Todo', 'Backlog')")
+				.addText((text) =>
+					text
+						.setPlaceholder("Todo")
+						.setValue(this.plugin.settings.autoAddKanbanColumn)
+						.onChange(async (value) => {
+							this.plugin.settings.autoAddKanbanColumn = value;
+							await this.plugin.saveSettings();
+						})
+				)
+				.addExtraButton((button) =>
+					button
+						.setIcon("reset")
+						.setTooltip("Reset to default (Todo)")
+						.onClick(async () => {
+							this.plugin.settings.autoAddKanbanColumn = "Todo";
+							await this.plugin.saveSettings();
+							this.display();
+						})
+				);
+		}
 	}
+}
+
+// Helper class for file picking
+class FileSuggestModal extends SuggestModal<TFile> {
+  plugin: TaskProgressBarPlugin;
+  onChooseItem: (file: TFile) => void;
+  
+  constructor(app: App, plugin: TaskProgressBarPlugin) {
+    super(app);
+    this.plugin = plugin;
+    this.onChooseItem = () => {}; // Default empty implementation
+  }
+  
+  getSuggestions(query: string): TFile[] {
+    const files = this.app.vault.getMarkdownFiles();
+    // Filter to only show potential Kanban board files
+    const kanbanFiles = files.filter(file => {
+      // Show all Markdown files when no query
+      if (!query) return true;
+      // Otherwise filter by name/path containing the query
+      return file.path.toLowerCase().includes(query.toLowerCase());
+    });
+    return kanbanFiles;
+  }
+  
+  renderSuggestion(file: TFile, el: HTMLElement) {
+    el.createEl("div", { text: file.path });
+  }
+  
+  // Implement the required abstract method
+  onChooseSuggestion(file: TFile, evt: MouseEvent | KeyboardEvent) {
+    if (this.onChooseItem) {
+      this.onChooseItem(file);
+    }
+  }
 }

@@ -9,6 +9,7 @@ Progress Tracker is an Obsidian plugin that visualizes your task completion prog
 - **Status Management**: Automatically updates status in the YAML frontmatter based on task progress
 - **Kanban Integration**: Moves cards between columns in Kanban boards when tasks are completed
 - **Metadata Updates**: Automatically adds completion dates and updates metadata when tasks reach 100%
+- **Auto-Add to Kanban**: Automatically adds files with tasks to a specified Kanban board
 
 ## Screenshots
 
@@ -56,6 +57,8 @@ The plugin tracks Markdown tasks (`- [ ]` and `- [x]`) in your notes and display
 - Automatically move cards in Kanban boards based on task status
 - Match column names to status values
 - Automatically detect Kanban boards in your vault
+- Auto-add files with tasks to a specified Kanban board
+- Choose which column new files should be added to
 
 ## Usage Tips
 
