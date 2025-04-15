@@ -372,22 +372,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			// Otherwise, create a new leaf in the left sidebar
 			// Check if workspace is ready
-			if (!workspace.leftSplit) {
-				setTimeout(() => this.activateView(), 500);
-				return;
-			}
+			workspace.onLayoutReady(() => {
+				const leaf = workspace.getLeftLeaf(false);
+				if (leaf) {
+					leaf.setViewState({
+						type: "progress-tracker",
+						active: true,
+					});
 
-			// Use getLeaf instead of createLeaf
-			const leaf = workspace.getLeftLeaf(false);
-			if (leaf) {
-				await leaf.setViewState({
-					type: "progress-tracker",
-					active: true,
-				});
+					// reveal the leaf
+					workspace.revealLeaf(leaf);
+				}
+			})
 
-				// Reveal the leaf
-				workspace.revealLeaf(leaf);
-			}
 		} catch (error) {
 			console.error("Error activating view:", error);
 			new Notice(
@@ -902,101 +899,56 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	async updateStatusBasedOnProgress(
-		file: TFile,
+		file: TFile, 
 		progressPercentage: number
 	): Promise<boolean> {
 		if (!file || !this.plugin.settings.autoChangeStatus) return false;
-
+	  
 		try {
-			// Read the file content
-			const content = await this.plugin.app.vault.read(file);
-
-			// Check if file has YAML frontmatter
-			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
-			const yamlMatch = content.match(yamlRegex);
-
-			if (!yamlMatch) return false;
-
-			let yaml = yamlMatch[1];
-			let updatedYaml = yaml;
-			let needsUpdate = false;
-
-			// Determine target status based on progress percentage
-			let targetStatus = this.plugin.settings.statusInProgress;
-
-			if (progressPercentage === 0) {
-				targetStatus = this.plugin.settings.statusTodo;
-			} else if (progressPercentage === 100) {
-				targetStatus = this.plugin.settings.statusCompleted;
-			}
-
-			// Check for existing status
-			const statusRegex = /status\s*:\s*([^\n]+)/i;
-			const statusMatch = yaml.match(statusRegex);
-			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
-
+		  let needsUpdate = false;
+		  
+		  // Determine target status based on progress percentage
+		  let targetStatus = this.plugin.settings.statusInProgress;
+		  if (progressPercentage === 0) {
+			targetStatus = this.plugin.settings.statusTodo;
+		  } else if (progressPercentage === 100) {
+			targetStatus = this.plugin.settings.statusCompleted;
+		  }
+	  
+		  // Use processFrontMatter API to update frontmatter
+		  await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			// Check current status
+			const currentStatus = frontmatter["status"];
+			
 			// Update if status is different
 			if (currentStatus !== targetStatus) {
-				if (statusMatch) {
-					// Replace existing status
-					updatedYaml = updatedYaml.replace(
-						statusRegex,
-						`status: ${targetStatus}`
-					);
-				} else {
-					// Add status if it doesn't exist
-					updatedYaml =
-						updatedYaml.trim() + `\nstatus: ${targetStatus}`;
-				}
-				needsUpdate = true;
+			  frontmatter["status"] = targetStatus;
+			  needsUpdate = true;
 			}
-
+	  
 			// Remove finished date if progress is less than 100%
-			if (
-				progressPercentage < 100 &&
-				this.plugin.settings.autoUpdateFinishedDate
-			) {
-				const finishedRegex = /finished\s*:\s*[^\n]+\n?/i;
-				if (finishedRegex.test(updatedYaml)) {
-					// Remove the finished date line entirely
-					updatedYaml = updatedYaml.replace(finishedRegex, "");
-					// Remove any extra newlines that might have been left
-					updatedYaml = updatedYaml.replace(/\n\n+/g, "\n");
-					updatedYaml = updatedYaml.trim();
-					needsUpdate = true;
-
-					if (this.plugin.settings.showDebugInfo) {
-						console.log(
-							`Removed finished date from file ${file.path} because progress is ${progressPercentage}%`
-						);
-					}
-				}
+			if (progressPercentage < 100 && this.plugin.settings.autoUpdateFinishedDate) {
+			  if (frontmatter["finished"]) {
+				delete frontmatter["finished"];
+				needsUpdate = true;
+			  }
 			}
-
-			// Update file if needed
-			if (needsUpdate) {
-				const updatedContent = content.replace(
-					yamlRegex,
-					`---\n${updatedYaml}\n---`
-				);
-				await this.plugin.app.vault.modify(file, updatedContent);
-
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						`Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
-						file.path
-					);
-				}
-
-				// Return true to indicate status was changed
-				return true;
-			}
+		  });
+	  
+		  if (needsUpdate && this.plugin.settings.showDebugInfo) {
+			console.log(
+			  `Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
+			  file.path
+			);
+		  }
+	  
+		  return needsUpdate;
+	  
 		} catch (error) {
-			console.error("Error updating status based on progress:", error);
+		  console.error("Error updating status based on progress:", error);
+		  return false;
 		}
-
-		return false; // Return false if no status change occurred
-	}
+	  }
 
 	// New method to update file metadata when tasks are completed
 	async updateFileMetadata(file: TFile, content: string) {
