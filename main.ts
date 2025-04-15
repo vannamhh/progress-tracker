@@ -439,7 +439,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			// Set the CSS rule with the user's preference
 			style.textContent = `
-				.workspace-tabs.mod-top.mod-top-right-space:not(.mod-top-left-space) {
+				.mod-sidedock .workspace-tabs:not(.mod-top-left-space) {
 					max-height: ${this.settings.maxTabsHeight} !important;
 					transition: max-height 0.3s ease;
 				}
