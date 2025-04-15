@@ -987,44 +987,47 @@ class TaskProgressBarView extends ItemView {
 	async updateFileMetadata(file: TFile) {
 		try {
 			// use processFrontMatter API to update metadata
-			await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-				let needsUpdate = false;
-				const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+			await this.app.fileManager.processFrontMatter(
+				file,
+				(frontmatter) => {
+					let needsUpdate = false;
+					const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
 
-				// update status if it enabled
-				if (this.plugin.settings.autoChangeStatus) {
-					const targetStatus = this.plugin.settings.statusCompleted;
-					if (frontmatter["status"] !== targetStatus) {
-						frontmatter["status"] = targetStatus;
-						needsUpdate = true;
+					// update status if it enabled
+					if (this.plugin.settings.autoChangeStatus) {
+						const targetStatus =
+							this.plugin.settings.statusCompleted;
+						if (frontmatter["status"] !== targetStatus) {
+							frontmatter["status"] = targetStatus;
+							needsUpdate = true;
 
-						if (this.plugin.settings.showDebugInfo) {
-							console.log(
-								`Updating status to ${targetStatus} in file:`,
-								file.path
-							);
+							if (this.plugin.settings.showDebugInfo) {
+								console.log(
+									`Updating status to ${targetStatus} in file:`,
+									file.path
+								);
+							}
 						}
 					}
-				}
 
-				// update finished date if enabled
-				if (this.plugin.settings.autoUpdateFinishedDate) {
-					if (frontmatter["finished"] !== today) {
-						frontmatter["finished"] = today;
-						needsUpdate = true;
+					// update finished date if enabled
+					if (this.plugin.settings.autoUpdateFinishedDate) {
+						if (frontmatter["finished"] !== today) {
+							frontmatter["finished"] = today;
+							needsUpdate = true;
 
-						if (this.plugin.settings.showDebugInfo) {
-							console.log(
-								`Updating finished date to ${today} in file:`,
-								file.path
-							);
+							if (this.plugin.settings.showDebugInfo) {
+								console.log(
+									`Updating finished date to ${today} in file:`,
+									file.path
+								);
+							}
 						}
 					}
+
+					return needsUpdate;
 				}
-
-				return needsUpdate;
-			});
-
+			);
 		} catch (error) {
 			console.error("Error updating file metadata:", error);
 			if (this.plugin.settings.showDebugInfo) {
@@ -1056,6 +1059,8 @@ class TaskProgressBarView extends ItemView {
 				totalTasks
 			);
 
+			// Wait for MetadataCache to update
+			await this.waitForCacheUpdate(file);
 			// Get status from YAML frontmatter if available - more accurate
 			let statusFromYaml = await this.getStatusFromYaml(file);
 			if (statusFromYaml) {
@@ -1154,7 +1159,7 @@ class TaskProgressBarView extends ItemView {
 
 			// Skip if not a Kanban board or doesn't reference our file
 			if (
-				!this.isKanbanBoard(boardContent) ||
+				!this.isKanbanBoard(boardFile) ||
 				!this.containsFileReference(boardContent, file)
 			)
 				continue;
@@ -1612,25 +1617,82 @@ class TaskProgressBarView extends ItemView {
 	 * Get the status from the file's YAML frontmatter
 	 */
 	async getStatusFromYaml(file: TFile): Promise<string | null> {
+		// Get the file cache from MetadataCache
+		let fileCache = this.app.metadataCache.getFileCache(file);
+
+		// If no cache or frontmatter, log and return null
+		if (!fileCache?.frontmatter) {
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(`No frontmatter found for file: ${file.path}`);
+			}
+			return null;
+		}
+
 		try {
-			const content = await this.plugin.app.vault.read(file);
-			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
-			const yamlMatch = content.match(yamlRegex);
+			// Retrieve status from frontmatter
+			const status = fileCache.frontmatter["status"];
+			if (typeof status === "string" && status.trim()) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Status found for ${file.path}: ${status}`);
+				}
+				return status.trim();
+			}
 
-			if (!yamlMatch) return null;
-
-			const yaml = yamlMatch[1];
-			const statusRegex = /status\s*:\s*([^\n]+)/i;
-			const statusMatch = yaml.match(statusRegex);
-
-			if (statusMatch) {
-				return statusMatch[1].trim();
+			// Log if no valid status is found
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(
+					`No valid status in frontmatter for file: ${file.path}`
+				);
 			}
 		} catch (error) {
-			console.error("Error getting status from YAML:", error);
+			// Log any errors during frontmatter access
+			console.error(
+				`Error accessing frontmatter for ${file.path}:`,
+				error
+			);
+			if (this.plugin.settings.showDebugInfo) {
+				console.error("Error details:", error);
+			}
 		}
 
 		return null;
+	}
+
+	// Utility function to wait for MetadataCache to update for a specific file
+	async waitForCacheUpdate(
+		file: TFile,
+		timeoutMs: number = 1000
+	): Promise<void> {
+		return new Promise((resolve, reject) => {
+			// Set a timeout to prevent hanging
+			const timeout = setTimeout(() => {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Timeout waiting for cache update for ${file.path}`
+					);
+				}
+				resolve();
+			}, timeoutMs);
+
+			// Listen for cache changes
+			const handler = (updatedFile: TFile) => {
+				if (updatedFile.path === file.path) {
+					// Cache updated, cleanup and resolve
+					this.app.metadataCache.off("changed", handler);
+					clearTimeout(timeout);
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(`Cache updated for ${file.path}`);
+					}
+					resolve();
+				}
+			};
+
+			// Register the listener
+			this.app.metadataCache.on("changed", handler);
+
+			// Trigger a cache refresh (optional, depends on Obsidian version)
+			// this.app.metadataCache.trigger("changed", file);
+		});
 	}
 
 	/**
@@ -1762,84 +1824,83 @@ class TaskProgressBarView extends ItemView {
 	 * Check if content appears to be a Kanban board
 	 * This method is necessary for the processKanbanBoards function
 	 */
-	private isKanbanBoard(content: string): boolean {
-		// Look for specific indicators of a Kanban board
+	private isKanbanBoard(file: TFile): boolean {
+		try {
+			// get file cache form metadata cache
+			const fileCache = this.app.metadataCache.getCache(file.path);
 
-		// Check for Kanban plugin metadata marker
-		if (content.includes("---\n\nkanban-plugin: basic")) {
-			return true;
-		}
+			// check Kanban plugin metadata through MetadataCache
+			if (
+				fileCache?.frontmatter &&
+				fileCache.frontmatter["kanban-plugin"] === "basic"
+			) {
+				return true;
+			}
 
-		// Check for typical Kanban structure - multiple columns with tasks
-		// Must have at least 2 columns with headers like "## Todo", "## In Progress", "## Done", etc.
-		const kanbanColumnHeaders = content.match(/^## .+?$/gm) || [];
-		if (kanbanColumnHeaders.length < 2) {
+			// check the structure columns through MetadataCache
+			const headers = fileCache?.headings || [];
+			if (headers.length < 2) {
+				return false;
+			}
+
+			// columns name within Kanban
+			const commonKanbanNames = [
+				"todo",
+				"to do",
+				"to-do",
+				"backlog",
+				"new",
+				"ideas",
+				"inbox",
+				"in progress",
+				"doing",
+				"working",
+				"current",
+				"ongoing",
+				"done",
+				"complete",
+				"completed",
+				"finished",
+				"blocked",
+				"waiting",
+			];
+
+			let kanbanColumnCount = 0;
+			headers.forEach((header) => {
+				if (header.level === 2) {
+					// only check h2 headers
+					const columnName = header.heading.toLowerCase();
+					if (
+						commonKanbanNames.some((name) =>
+							columnName.includes(name)
+						)
+					) {
+						kanbanColumnCount++;
+					}
+				}
+			});
+
+			// check if have two columns suitable
+			if (kanbanColumnCount >= 2) {
+				return true;
+			}
+
+			const hasTargetColumn = headers.some(
+				(header) =>
+					header.level === 2 &&
+					header.heading.toLowerCase() ===
+						this.plugin.settings.kanbanCompletedColumn.toLowerCase()
+			);
+
+			if (hasTargetColumn) {
+				return true;
+			}
+
+			return false;
+		} catch (error) {
+			console.error("Error checking if file is Kanban board:", error);
 			return false;
 		}
-
-		// Column names typically used in Kanban boards
-		const commonKanbanNames = [
-			"todo",
-			"to do",
-			"to-do",
-			"backlog",
-			"new",
-			"ideas",
-			"inbox",
-			"in progress",
-			"doing",
-			"working",
-			"current",
-			"ongoing",
-			"done",
-			"complete",
-			"completed",
-			"finished",
-			"blocked",
-			"waiting",
-			"on hold",
-			"review",
-		];
-
-		// Check if at least one column name matches common Kanban terminology
-		let foundKanbanName = false;
-		for (const header of kanbanColumnHeaders) {
-			const columnName = header.substring(3).toLowerCase().trim();
-			if (commonKanbanNames.some((name) => columnName.includes(name))) {
-				foundKanbanName = true;
-				break;
-			}
-		}
-
-		// Check for column with our target name specifically
-		const targetColumnExists = kanbanColumnHeaders.some(
-			(header) =>
-				header.substring(3).toLowerCase().trim() ===
-				this.plugin.settings.kanbanCompletedColumn.toLowerCase()
-		);
-
-		// If we find our target column name, it's very likely this is a Kanban board
-		if (targetColumnExists) {
-			return true;
-		}
-
-		// Check for items (-) within columns
-		// Split content by headers
-		const sections = content.split(/^## /m).slice(1);
-		let hasItems = false;
-
-		for (const section of sections) {
-			// Check for list items within the section
-			if (section.match(/^- .+/m)) {
-				hasItems = true;
-				break;
-			}
-		}
-
-		// For a file to be considered a Kanban board:
-		// 1. Must have at least 2 column headers
-		// 2. Must either have common Kanban column names OR have items in columns
-		return kanbanColumnHeaders.length >= 2 && (foundKanbanName || hasItems);
 	}
 
 	/**
@@ -1899,7 +1960,7 @@ class TaskProgressBarView extends ItemView {
 			);
 
 			// Skip if this is not a Kanban board
-			if (!this.isKanbanBoard(boardContent)) {
+			if (!this.isKanbanBoard(kanbanFile)) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(
 						`File at path ${boardPath} is not a Kanban board`
