@@ -60,7 +60,6 @@ function getDataviewAPI(app: App): DataviewApi | null {
 }
 
 interface TaskProgressBarSettings {
-	mySetting: string; // Appears unused - could be removed in the future
 	showDebugInfo: boolean;
 	progressColorScheme: "default" | "red-orange-green" | "custom";
 	lowProgressColor: string;
@@ -94,7 +93,6 @@ interface TaskProgressBarSettings {
 }
 
 const DEFAULT_SETTINGS: TaskProgressBarSettings = {
-	mySetting: "default",
 	showDebugInfo: false,
 	progressColorScheme: "default",
 	lowProgressColor: "#e06c75", // Red
@@ -1985,9 +1983,7 @@ class TaskProgressBarView extends ItemView {
 			}
 
 			// Read the board content
-			const boardContent = await this.plugin.app.vault.read(
-				kanbanFile as TFile
-			);
+			const boardContent = await this.plugin.app.vault.read(kanbanFile);
 
 			// Skip if this is not a Kanban board
 			if (!this.isKanbanBoard(kanbanFile)) {
@@ -2074,7 +2070,7 @@ class TaskProgressBarView extends ItemView {
 				boardContent.substring(insertPosition);
 
 			// Update the file
-			await this.plugin.app.vault.modify(kanbanFile as TFile, newContent);
+			await this.plugin.app.vault.modify(kanbanFile, newContent);
 
 			// Show notice
 			new Notice(
@@ -2104,8 +2100,6 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
-
-		containerEl.createEl("h2", { text: "Task Progress Bar Settings" });
 
 		// Add Dataview status information
 		const dataviewStatus = containerEl.createDiv({
@@ -2140,22 +2134,6 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			});
 		}
 
-		// General settings section
-		containerEl.createEl("h3", { text: "General Settings" });
-
-		new Setting(containerEl)
-			.setName("Setting")
-			.setDesc("Description of the setting")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter your setting")
-					.setValue(this.plugin.settings.mySetting)
-					.onChange(async (value) => {
-						this.plugin.settings.mySetting = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
 		new Setting(containerEl)
 			.setName("Show debug info")
 			.setDesc(
@@ -2178,7 +2156,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Animation settings section
-		containerEl.createEl("h3", { text: "Animation Settings" });
+		new Setting(containerEl).setName("Animation").setHeading();
 
 		// Add new setting for animation
 		new Setting(containerEl)
@@ -2196,7 +2174,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Performance settings section
-		containerEl.createEl("h3", { text: "Performance Settings" });
+		new Setting(containerEl).setName("Performance").setHeading();
 
 		new Setting(containerEl)
 			.setName("Editor change delay")
@@ -2284,7 +2262,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Add color scheme settings
-		containerEl.createEl("h3", { text: "Progress bar colors" });
+		new Setting(containerEl).setName("Progress bar colors").setHeading();
 
 		new Setting(containerEl)
 			.setName("Color scheme")
@@ -2541,7 +2519,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		}
 
 		// Interface settings section (Add this before or after Animation Settings)
-		containerEl.createEl("h3", { text: "Interface Settings" });
+		new Setting(containerEl).setName("Interface").setHeading();
 
 		// Fix the Max Tabs Height setting to allow proper input
 		new Setting(containerEl)
@@ -2606,7 +2584,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Add Metadata Auto-Update Settings
-		containerEl.createEl("h3", { text: "Metadata auto-update" });
+		new Setting(containerEl).setName("Metadata auto-update").setHeading();
 
 		new Setting(containerEl)
 			.setName("Auto-update metadata")
@@ -2729,7 +2707,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			}
 
 			// Add Kanban integration settings
-			containerEl.createEl("h3", { text: "Kanban integration" });
+			new Setting(containerEl).setName("Kanban integration").setHeading();
 
 			new Setting(containerEl)
 				.setName("Update Kanban boards")
