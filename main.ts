@@ -315,7 +315,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 		// Register commands
 		this.addCommand({
 			id: "clear-completed-files-cache",
-			name: "Clear Completed Files Cache",
+			name: "Clear completed files cache",
 			callback: () => {
 				if (this.sidebarView) {
 					this.sidebarView.clearCompletedFilesCache();
@@ -337,7 +337,6 @@ export default class TaskProgressBarPlugin extends Plugin {
 			this.dataviewCheckInterval = window.setInterval(() => {
 				this.dvAPI = getDataviewAPI(this.app);
 				if (this.dvAPI) {
-					console.log("Dataview API found");
 					// If found, clear interval
 					if (this.dataviewCheckInterval) {
 						clearInterval(this.dataviewCheckInterval);
@@ -374,7 +373,6 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Otherwise, create a new leaf in the left sidebar
 			// Check if workspace is ready
 			if (!workspace.leftSplit) {
-				console.log("Workspace not ready yet, retrying in 500ms");
 				setTimeout(() => this.activateView(), 500);
 				return;
 			}
@@ -487,7 +485,7 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "Task Progress Bar";
+		return "Task progress bar";
 	}
 
 	getIcon(): string {
@@ -826,7 +824,7 @@ class TaskProgressBarView extends ItemView {
 					debugInfo.empty();
 				}
 				
-				debugInfo.createEl("p", { text: `Debug Info:` });
+				debugInfo.createEl("p", { text: `Debug info:` });
 				debugInfo.createEl("p", { text: `File: ${this.currentFile?.path}` });
 				debugInfo.createEl("p", { text: `Incomplete tasks: ${totalTasks - completedCount}` });
 				debugInfo.createEl("p", { text: `Completed tasks: ${completedCount}` });
@@ -2112,7 +2110,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Show Debug Info")
+			.setName("Show debug info")
 			.setDesc(
 				"Show debug information in the sidebar to help troubleshoot task counting issues"
 			)
@@ -2137,7 +2135,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 		// Add new setting for animation
 		new Setting(containerEl)
-			.setName("Show Update Animation")
+			.setName("Show update animation")
 			.setDesc("Show a brief animation when updating the progress bar")
 			.addToggle((toggle) =>
 				toggle
@@ -2154,7 +2152,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "Performance Settings" });
 
 		new Setting(containerEl)
-			.setName("Editor Change Delay")
+			.setName("Editor change delay")
 			.setDesc(
 				"Delay before updating after editor content changes (lower = more responsive, higher = better performance)"
 			)
@@ -2187,7 +2185,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Keyboard Input Delay")
+			.setName("Keyboard input delay")
 			.setDesc(
 				"Delay after keyboard input before updating progress (in milliseconds)"
 			)
@@ -2213,7 +2211,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Checkbox Click Delay")
+			.setName("Checkbox click delay")
 			.setDesc(
 				"Delay after checkbox click before updating progress (in milliseconds)"
 			)
@@ -2239,10 +2237,10 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Add color scheme settings
-		containerEl.createEl("h3", { text: "Progress Bar Colors" });
+		containerEl.createEl("h3", { text: "Progress bar colors" });
 
 		new Setting(containerEl)
-			.setName("Color Scheme")
+			.setName("Color scheme")
 			.setDesc("Choose a color scheme for the progress bar")
 			.addDropdown((dropdown) =>
 				dropdown
@@ -2297,7 +2295,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		// Only show custom color settings if custom is selected
 		if (this.plugin.settings.progressColorScheme === "custom") {
 			new Setting(containerEl)
-				.setName("Low Progress Color")
+				.setName("Low progress color")
 				.setDesc(
 					`Color for progress below ${this.plugin.settings.lowProgressThreshold}%`
 				)
@@ -2320,7 +2318,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("Medium Progress Color")
+				.setName("Medium progress color")
 				.setDesc(
 					`Color for progress between ${this.plugin.settings.lowProgressThreshold}% and ${this.plugin.settings.mediumProgressThreshold}%`
 				)
@@ -2343,7 +2341,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("High Progress Color")
+				.setName("High progress color")
 				.setDesc(
 					`Color for progress between ${this.plugin.settings.mediumProgressThreshold}% and ${this.plugin.settings.highProgressThreshold}%`
 				)
@@ -2366,7 +2364,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("Complete Progress Color")
+				.setName("Complete progress color")
 				.setDesc("Color for 100% progress")
 				.addText((text) =>
 					text
@@ -2388,7 +2386,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 			// Add threshold settings
 			new Setting(containerEl)
-				.setName("Low Progress Threshold")
+				.setName("Low progress threshold")
 				.setDesc("Percentage below which progress is considered low")
 				.addSlider((slider) =>
 					slider
@@ -2420,7 +2418,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("Medium Progress Threshold")
+				.setName("Medium progress threshold")
 				.setDesc("Percentage below which progress is considered medium")
 				.addSlider((slider) =>
 					slider
@@ -2461,7 +2459,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("High Progress Threshold")
+				.setName("High progress threshold")
 				.setDesc(
 					"Percentage below which progress is considered high (but not complete)"
 				)
@@ -2500,7 +2498,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 		// Fix the Max Tabs Height setting to allow proper input
 		new Setting(containerEl)
-			.setName("Max Tabs Height")
+			.setName("Max tabs height")
 			.setDesc(
 				"Maximum height for workspace tabs (e.g., 110px, 200px, auto)"
 			)
@@ -2561,7 +2559,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			);
 
 		// Add Metadata Auto-Update Settings
-		containerEl.createEl("h3", { text: "Metadata Auto-Update" });
+		containerEl.createEl("h3", { text: "Metadata auto-update" });
 
 		new Setting(containerEl)
 			.setName("Auto-update metadata")
@@ -2612,7 +2610,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			// Show status label settings if status changing is enabled
 			if (this.plugin.settings.autoChangeStatus) {
 				new Setting(containerEl)
-					.setName("Todo Status Label")
+					.setName("Todo status label")
 					.setDesc("Status label for files with 0% progress")
 					.addText((text) =>
 						text
@@ -2635,7 +2633,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 					);
 
 				new Setting(containerEl)
-					.setName("In Progress Status Label")
+					.setName("In progress status label")
 					.setDesc("Status label for files with 1-99% progress")
 					.addText((text) =>
 						text
@@ -2659,7 +2657,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 					);
 
 				new Setting(containerEl)
-					.setName("Completed Status Label")
+					.setName("Completed status label")
 					.setDesc("Status label for files with 100% progress")
 					.addText((text) =>
 						text
@@ -2684,7 +2682,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			}
 
 			// Add Kanban integration settings
-			containerEl.createEl("h3", { text: "Kanban Integration" });
+			containerEl.createEl("h3", { text: "Kanban integration" });
 
 			new Setting(containerEl)
 				.setName("Update Kanban boards")
@@ -2722,7 +2720,7 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 				// Only show this if sync with status is disabled (legacy mode)
 				if (!this.plugin.settings.kanbanSyncWithStatus) {
 					new Setting(containerEl)
-						.setName("Completed Column Name")
+						.setName("Completed column name")
 						.setDesc(
 							"The name of the column where completed items should be moved to (e.g., 'Complete', 'Done', 'Finished')"
 						)
