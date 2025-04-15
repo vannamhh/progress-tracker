@@ -1845,24 +1845,32 @@ class TaskProgressBarView extends ItemView {
 	 */
 	private isKanbanBoard(file: TFile): boolean {
 		try {
-			// get file cache form metadata cache
-			const fileCache = this.app.metadataCache.getCache(file.path);
-
-			// check Kanban plugin metadata through MetadataCache
-			if (
-				fileCache?.frontmatter &&
-				fileCache.frontmatter["kanban-plugin"] === "basic"
-			) {
-				return true;
-			}
-
-			// check the structure columns through MetadataCache
-			const headers = fileCache?.headings || [];
-			if (headers.length < 2) {
+			// Use MetadataCache to get file cache
+			const fileCache = this.app.metadataCache.getFileCache(file);
+			if (!fileCache) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`No cache found for file: ${file.path}`);
+				}
 				return false;
 			}
 
-			// columns name within Kanban
+			// Check for Kanban plugin frontmatter
+			if (fileCache.frontmatter?.["kanban-plugin"] === "basic") {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Detected Kanban plugin board: ${file.path}`);
+				}
+				return true;
+			}
+
+			// Check for Kanban-like structure via headers
+			const headers = fileCache.headings || [];
+			if (headers.length < 2) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Insufficient headers in file: ${file.path}`);
+				}
+				return false;
+			}
+
 			const commonKanbanNames = [
 				"todo",
 				"to do",
@@ -1885,39 +1893,42 @@ class TaskProgressBarView extends ItemView {
 			];
 
 			let kanbanColumnCount = 0;
-			headers.forEach((header) => {
-				if (header.level === 2) {
-					// only check h2 headers
-					const columnName = header.heading.toLowerCase();
-					if (
-						commonKanbanNames.some((name) =>
-							columnName.includes(name)
-						)
-					) {
-						kanbanColumnCount++;
-					}
+			const completedColumnLower =
+				this.plugin.settings.kanbanCompletedColumn.toLowerCase();
+
+			for (const header of headers) {
+				if (header.level !== 2) continue;
+				const columnName = header.heading.toLowerCase();
+
+				if (
+					commonKanbanNames.some((name) =>
+						columnName.includes(name)
+					) ||
+					columnName === completedColumnLower
+				) {
+					kanbanColumnCount++;
 				}
-			});
-
-			// check if have two columns suitable
-			if (kanbanColumnCount >= 2) {
-				return true;
 			}
 
-			const hasTargetColumn = headers.some(
-				(header) =>
-					header.level === 2 &&
-					header.heading.toLowerCase() ===
-						this.plugin.settings.kanbanCompletedColumn.toLowerCase()
-			);
-
-			if (hasTargetColumn) {
-				return true;
+			const isKanban = kanbanColumnCount >= 2;
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(
+					`File ${file.path} is ${
+						isKanban ? "" : "not "
+					}a Kanban board ` +
+						`(columns detected: ${kanbanColumnCount})`
+				);
 			}
 
-			return false;
+			return isKanban;
 		} catch (error) {
-			console.error("Error checking if file is Kanban board:", error);
+			console.error(
+				`Error checking if ${file.path} is a Kanban board:`,
+				error
+			);
+			if (this.plugin.settings.showDebugInfo) {
+				console.error("Error details:", error);
+			}
 			return false;
 		}
 	}
