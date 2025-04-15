@@ -11,7 +11,7 @@ import {
 	MarkdownPostProcessorContext,
 	debounce,
 	Notice,
-	SuggestModal  // Add this import
+	SuggestModal, // Add this import
 } from "obsidian";
 
 // Define DataviewAPI interface
@@ -155,7 +155,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new TaskProgressBarSettingTab(this.app, this));
 
-		 // Check Dataview API and set up interval to check again if not found
+		// Check Dataview API and set up interval to check again if not found
 		this.checkDataviewAPI();
 
 		// Register event to update progress bar when file changes
@@ -383,8 +383,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 					// reveal the leaf
 					workspace.revealLeaf(leaf);
 				}
-			})
-
+			});
 		} catch (error) {
 			console.error("Error activating view:", error);
 			new Notice(
@@ -554,7 +553,7 @@ class TaskProgressBarView extends ItemView {
 						progressContainer.empty();
 						progressContainer.createEl("p", {
 							text: "No tasks found in this file",
-							cls: "no-tasks-message"
+							cls: "no-tasks-message",
 						});
 					}
 				} else {
@@ -575,7 +574,7 @@ class TaskProgressBarView extends ItemView {
 						progressContainer.empty();
 						progressContainer.createEl("p", {
 							text: "No tasks found in this file",
-							cls: "no-tasks-message"
+							cls: "no-tasks-message",
 						});
 					}
 					if (this.plugin.settings.showDebugInfo) {
@@ -657,8 +656,10 @@ class TaskProgressBarView extends ItemView {
 			let relaxedIncompleteTasks = 0;
 			let relaxedCompletedTasks = 0;
 			if (totalTasks === 0) {
-				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || []).length;
-				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || []).length;
+				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || [])
+					.length;
+				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || [])
+					.length;
 				totalTasks = relaxedIncompleteTasks + relaxedCompletedTasks;
 			}
 
@@ -682,7 +683,7 @@ class TaskProgressBarView extends ItemView {
 					container.empty();
 					container.createEl("p", {
 						text: "No tasks found in this file",
-						cls: "no-tasks-message"
+						cls: "no-tasks-message",
 					});
 				}
 				return;
@@ -718,7 +719,7 @@ class TaskProgressBarView extends ItemView {
 			if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
 				// Only update metadata and show notification if this file hasn't been marked as completed yet
 				if (!this.completedFilesMap.has(file.path)) {
-					await this.updateFileMetadata(file, content);
+					await this.updateFileMetadata(file);
 
 					// Mark this file as completed to avoid repeated updates
 					this.completedFilesMap.set(file.path, true);
@@ -731,7 +732,7 @@ class TaskProgressBarView extends ItemView {
 				}
 			}
 
-			 // Auto-add to Kanban board if enabled and file has tasks
+			// Auto-add to Kanban board if enabled and file has tasks
 			if (
 				this.plugin.settings.autoAddToKanban &&
 				this.plugin.settings.autoAddKanbanBoard &&
@@ -742,68 +743,84 @@ class TaskProgressBarView extends ItemView {
 			}
 
 			// Check if we already have progress elements
-			let progressLayout = container.querySelector(".progress-layout") as HTMLElement;
-			let statsContainer = container.querySelector(".progress-stats-compact") as HTMLElement;
-			
+			let progressLayout = container.querySelector(
+				".progress-layout"
+			) as HTMLElement;
+			let statsContainer = container.querySelector(
+				".progress-stats-compact"
+			) as HTMLElement;
+
 			// If no existing elements, create container structure
 			if (!progressLayout || !statsContainer) {
 				container.empty();
-				
+
 				// Create a more compact layout
-				progressLayout = container.createDiv({ cls: "progress-layout" });
-				
+				progressLayout = container.createDiv({
+					cls: "progress-layout",
+				});
+
 				// Create percentage text element
 				progressLayout.createEl("div", {
 					cls: "progress-percentage-small",
 				});
-				
+
 				// Create HTML5-like progress bar
 				const progressBarContainer = progressLayout.createDiv({
 					cls: "pt-progress-bar-container",
 				});
-				
+
 				// Create the outer progress element
 				const progressElement = progressBarContainer.createDiv({
 					cls: "progress-element",
 				});
-				
+
 				// Create the inner value element that will be animated
 				progressElement.createDiv({
 					cls: "progress-value",
 				});
-				
+
 				// Create stats container at the bottom
 				statsContainer = container.createDiv({
 					cls: "progress-stats-compact",
 				});
 			}
-			
+
 			// Now update the existing elements with new values
-			
+
 			// Update percentage text
-			const percentageElement = progressLayout.querySelector(".progress-percentage-small") as HTMLElement;
+			const percentageElement = progressLayout.querySelector(
+				".progress-percentage-small"
+			) as HTMLElement;
 			if (percentageElement) {
 				percentageElement.setText(`${percentage}%`);
 			}
-			
+
 			// Update progress bar width with smooth transition
-			const progressValue = container.querySelector(".progress-value") as HTMLElement;
+			const progressValue = container.querySelector(
+				".progress-value"
+			) as HTMLElement;
 			if (progressValue) {
 				// Add transition style if not already present
 				if (!progressValue.hasAttribute("data-has-transition")) {
-					progressValue.style.transition = "width 0.3s ease-in-out, background-color 0.3s ease";
+					progressValue.style.transition =
+						"width 0.3s ease-in-out, background-color 0.3s ease";
 					progressValue.setAttribute("data-has-transition", "true");
 				}
 				progressValue.style.width = `${percentage}%`;
 				this.applyProgressColor(progressValue, percentage);
 			}
-			
+
 			// Update progress element data attribute
-			const progressElement = container.querySelector(".progress-element") as HTMLElement;
+			const progressElement = container.querySelector(
+				".progress-element"
+			) as HTMLElement;
 			if (progressElement) {
-				progressElement.setAttribute("data-percentage", percentage.toString());
+				progressElement.setAttribute(
+					"data-percentage",
+					percentage.toString()
+				);
 			}
-			
+
 			// Update stats text
 			if (statsContainer) {
 				statsContainer.empty();
@@ -811,30 +828,41 @@ class TaskProgressBarView extends ItemView {
 					text: `${completedCount}/${totalTasks} tasks`,
 				});
 			}
-			
+
 			// Update debug info if needed
 			if (this.plugin.settings.showDebugInfo) {
-				let debugInfo = container.querySelector(".debug-info") as HTMLElement;
+				let debugInfo = container.querySelector(
+					".debug-info"
+				) as HTMLElement;
 				if (!debugInfo) {
 					debugInfo = container.createDiv({ cls: "debug-info" });
 				} else {
 					debugInfo.empty();
 				}
-				
+
 				debugInfo.createEl("p", { text: `Debug info:` });
-				debugInfo.createEl("p", { text: `File: ${this.currentFile?.path}` });
-				debugInfo.createEl("p", { text: `Incomplete tasks: ${totalTasks - completedCount}` });
-				debugInfo.createEl("p", { text: `Completed tasks: ${completedCount}` });
+				debugInfo.createEl("p", {
+					text: `File: ${this.currentFile?.path}`,
+				});
+				debugInfo.createEl("p", {
+					text: `Incomplete tasks: ${totalTasks - completedCount}`,
+				});
+				debugInfo.createEl("p", {
+					text: `Completed tasks: ${completedCount}`,
+				});
 				debugInfo.createEl("p", { text: `Total tasks: ${totalTasks}` });
 				debugInfo.createEl("p", { text: `Percentage: ${percentage}%` });
-				debugInfo.createEl("p", { text: `Update time: ${new Date().toISOString()}` });
-				debugInfo.createEl("p", { text: `Color scheme: ${this.plugin.settings.progressColorScheme}` });
+				debugInfo.createEl("p", {
+					text: `Update time: ${new Date().toISOString()}`,
+				});
+				debugInfo.createEl("p", {
+					text: `Color scheme: ${this.plugin.settings.progressColorScheme}`,
+				});
 			} else {
 				// Remove debug info if it exists but debug is disabled
 				const debugInfo = container.querySelector(".debug-info");
 				if (debugInfo) debugInfo.remove();
 			}
-			
 		} catch (error) {
 			console.error("Error creating progress bar from string:", error);
 			container.empty();
@@ -899,157 +927,104 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	async updateStatusBasedOnProgress(
-		file: TFile, 
+		file: TFile,
 		progressPercentage: number
 	): Promise<boolean> {
 		if (!file || !this.plugin.settings.autoChangeStatus) return false;
-	  
+
 		try {
-		  let needsUpdate = false;
-		  
-		  // Determine target status based on progress percentage
-		  let targetStatus = this.plugin.settings.statusInProgress;
-		  if (progressPercentage === 0) {
-			targetStatus = this.plugin.settings.statusTodo;
-		  } else if (progressPercentage === 100) {
-			targetStatus = this.plugin.settings.statusCompleted;
-		  }
-	  
-		  // Use processFrontMatter API to update frontmatter
-		  await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-			// Check current status
-			const currentStatus = frontmatter["status"];
-			
-			// Update if status is different
-			if (currentStatus !== targetStatus) {
-			  frontmatter["status"] = targetStatus;
-			  needsUpdate = true;
+			let needsUpdate = false;
+
+			// Determine target status based on progress percentage
+			let targetStatus = this.plugin.settings.statusInProgress;
+			if (progressPercentage === 0) {
+				targetStatus = this.plugin.settings.statusTodo;
+			} else if (progressPercentage === 100) {
+				targetStatus = this.plugin.settings.statusCompleted;
 			}
-	  
-			// Remove finished date if progress is less than 100%
-			if (progressPercentage < 100 && this.plugin.settings.autoUpdateFinishedDate) {
-			  if (frontmatter["finished"]) {
-				delete frontmatter["finished"];
-				needsUpdate = true;
-			  }
-			}
-		  });
-	  
-		  if (needsUpdate && this.plugin.settings.showDebugInfo) {
-			console.log(
-			  `Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
-			  file.path
+
+			// Use processFrontMatter API to update frontmatter
+			await this.app.fileManager.processFrontMatter(
+				file,
+				(frontmatter) => {
+					// Check current status
+					const currentStatus = frontmatter["status"];
+
+					// Update if status is different
+					if (currentStatus !== targetStatus) {
+						frontmatter["status"] = targetStatus;
+						needsUpdate = true;
+					}
+
+					// Remove finished date if progress is less than 100%
+					if (
+						progressPercentage < 100 &&
+						this.plugin.settings.autoUpdateFinishedDate
+					) {
+						if (frontmatter["finished"]) {
+							delete frontmatter["finished"];
+							needsUpdate = true;
+						}
+					}
+				}
 			);
-		  }
-	  
-		  return needsUpdate;
-	  
+
+			if (needsUpdate && this.plugin.settings.showDebugInfo) {
+				console.log(
+					`Updated status to "${targetStatus}" based on progress ${progressPercentage}% for file:`,
+					file.path
+				);
+			}
+
+			return needsUpdate;
 		} catch (error) {
-		  console.error("Error updating status based on progress:", error);
-		  return false;
+			console.error("Error updating status based on progress:", error);
+			return false;
 		}
-	  }
+	}
 
 	// New method to update file metadata when tasks are completed
-	async updateFileMetadata(file: TFile, content: string) {
+	async updateFileMetadata(file: TFile) {
 		try {
-			// Check if file has YAML frontmatter
-			const yamlRegex = /^---\s*\n([\s\S]*?)\n---/;
-			const yamlMatch = content.match(yamlRegex);
+			// use processFrontMatter API to update metadata
+			await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+				let needsUpdate = false;
+				const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
 
-			if (!yamlMatch) {
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						"No YAML frontmatter found in file:",
-						file.path
-					);
-				}
-				return;
-			}
-
-			let yaml = yamlMatch[1];
-			let needsUpdate = false;
-			let updatedYaml = yaml;
-			// Define today's date at the beginning of the function so it's available throughout
-			const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
-
-			// Check for existing status
-			const statusRegex = /status\s*:\s*([^\n]+)/i;
-			const statusMatch = yaml.match(statusRegex);
-			const currentStatus = statusMatch ? statusMatch[1].trim() : null;
-
-			// Update status based on settings if enabled
-			if (this.plugin.settings.autoChangeStatus) {
-				const targetStatus = this.plugin.settings.statusCompleted;
-
-				// Only update if the current status isn't already the completed status
-				if (currentStatus !== targetStatus) {
-					if (statusMatch) {
-						// Replace existing status
-						updatedYaml = updatedYaml.replace(
-							statusRegex,
-							`status: ${targetStatus}`
-						);
+				// update status if it enabled
+				if (this.plugin.settings.autoChangeStatus) {
+					const targetStatus = this.plugin.settings.statusCompleted;
+					if (frontmatter["status"] !== targetStatus) {
+						frontmatter["status"] = targetStatus;
 						needsUpdate = true;
-					} else {
-						// Add status if it doesn't exist
-						updatedYaml =
-							updatedYaml.trim() + `\nstatus: ${targetStatus}`;
-						needsUpdate = true;
-					}
 
-					if (this.plugin.settings.showDebugInfo) {
-						console.log(
-							`Updating status to ${targetStatus} in file:`,
-							file.path
-						);
+						if (this.plugin.settings.showDebugInfo) {
+							console.log(
+								`Updating status to ${targetStatus} in file:`,
+								file.path
+							);
+						}
 					}
 				}
-			}
 
-			// Update finished date functionality remains the same
-			// Check if finished date already exists and matches today's date
-			const finishedDateRegex = /finished\s*:\s*(\d{4}-\d{2}-\d{2})/i;
-			const finishedDateMatch = yaml.match(finishedDateRegex);
-			const finishedDateAlreadySet =
-				finishedDateMatch && finishedDateMatch[1] === today;
+				// update finished date if enabled
+				if (this.plugin.settings.autoUpdateFinishedDate) {
+					if (frontmatter["finished"] !== today) {
+						frontmatter["finished"] = today;
+						needsUpdate = true;
 
-			// Update finished date only if enabled and not already set to today's date
-			if (
-				this.plugin.settings.autoUpdateFinishedDate &&
-				!finishedDateAlreadySet
-			) {
-				const finishedRegex = /(finished\s*:)\s*([^\n]*)/i;
-
-				if (finishedRegex.test(yaml)) {
-					// Replace existing finished date with proper spacing
-					updatedYaml = updatedYaml.replace(
-						finishedRegex,
-						`$1 ${today}`
-					);
-					needsUpdate = true;
-				} else {
-					// Add finished date if it doesn't exist, ensuring proper spacing
-					updatedYaml = updatedYaml.trim() + `\nfinished: ${today}`;
-					needsUpdate = true;
+						if (this.plugin.settings.showDebugInfo) {
+							console.log(
+								`Updating finished date to ${today} in file:`,
+								file.path
+							);
+						}
+					}
 				}
 
-				if (this.plugin.settings.showDebugInfo) {
-					console.log(
-						`Updating finished date to ${today} in file:`,
-						file.path
-					);
-				}
-			}
+				return needsUpdate;
+			});
 
-			// Update file content if changes were made
-			if (needsUpdate) {
-				const updatedContent = content.replace(
-					yamlRegex,
-					`---\n${updatedYaml}\n---`
-				);
-				await this.plugin.app.vault.modify(file, updatedContent);
-			}
 		} catch (error) {
 			console.error("Error updating file metadata:", error);
 			if (this.plugin.settings.showDebugInfo) {
@@ -1150,12 +1125,17 @@ class TaskProgressBarView extends ItemView {
 		file: TFile,
 		currentStatus: string
 	): Promise<number> {
-			// Skip plugin files and obvious Kanban files to avoid self-reference issues
+		// Skip plugin files and obvious Kanban files to avoid self-reference issues
 		const filePath = file.path.toLowerCase();
-		if (filePath.includes('.obsidian/plugins/progress-tracker') || 
-			filePath.includes('kanban')) {
+		const configDir = this.plugin.app.vault.configDir.toLowerCase();
+		if (
+			filePath.includes(`${configDir}/plugins/progress-tracker`) ||
+			filePath.includes("kanban")
+		) {
 			if (this.plugin.settings.showDebugInfo) {
-				console.log(`Skipping plugin or kanban file for kanban processing: ${file.path}`);
+				console.log(
+					`Skipping plugin or kanban file for kanban processing: ${file.path}`
+				);
 			}
 			return 0;
 		}
@@ -1868,15 +1848,21 @@ class TaskProgressBarView extends ItemView {
 	async addFileToKanbanBoard(file: TFile): Promise<boolean> {
 		try {
 			// Skip if auto-add setting is disabled or board path is empty
-			if (!this.plugin.settings.autoAddToKanban || !this.plugin.settings.autoAddKanbanBoard) {
+			if (
+				!this.plugin.settings.autoAddToKanban ||
+				!this.plugin.settings.autoAddKanbanBoard
+			) {
 				return false;
 			}
 
-				// Skip plugin files and Kanban board files to avoid self-reference
+			// Skip plugin files and Kanban board files to avoid self-reference
 			const filePath = file.path.toLowerCase();
-			if (filePath.includes('.obsidian/plugins/progress-tracker') || 
-				filePath.includes('kanban') || 
-				filePath === this.plugin.settings.autoAddKanbanBoard) {
+			const configDir = this.plugin.app.vault.configDir.toLowerCase();
+			if (
+				filePath.includes(`${configDir}/plugins/progress-tracker`) ||
+				filePath.includes("kanban") ||
+				filePath === this.plugin.settings.autoAddKanbanBoard
+			) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(`Skipping plugin or kanban file: ${file.path}`);
 				}
@@ -1885,66 +1871,80 @@ class TaskProgressBarView extends ItemView {
 
 			// Get the Kanban board file
 			const boardPath = this.plugin.settings.autoAddKanbanBoard;
-			const kanbanFile = this.plugin.app.vault.getAbstractFileByPath(boardPath);
-			
+			const kanbanFile =
+				this.plugin.app.vault.getAbstractFileByPath(boardPath);
+
 			if (!kanbanFile || !(kanbanFile instanceof TFile)) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Could not find Kanban board at path: ${boardPath}`);
+					console.log(
+						`Could not find Kanban board at path: ${boardPath}`
+					);
 				}
 				return false;
 			}
 
-				// Skip if trying to add the kanban board to itself
+			// Skip if trying to add the kanban board to itself
 			if (file.path === kanbanFile.path) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Skipping adding kanban board to itself: ${file.path}`);
+					console.log(
+						`Skipping adding kanban board to itself: ${file.path}`
+					);
 				}
 				return false;
 			}
 
 			// Read the board content
-			const boardContent = await this.plugin.app.vault.read(kanbanFile as TFile);
-			
+			const boardContent = await this.plugin.app.vault.read(
+				kanbanFile as TFile
+			);
+
 			// Skip if this is not a Kanban board
 			if (!this.isKanbanBoard(boardContent)) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`File at path ${boardPath} is not a Kanban board`);
+					console.log(
+						`File at path ${boardPath} is not a Kanban board`
+					);
 				}
 				return false;
 			}
-			
+
 			// Check if the file is already referenced in the board
 			if (this.containsFileReference(boardContent, file)) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`File ${file.path} is already in Kanban board ${boardPath}`);
+					console.log(
+						`File ${file.path} is already in Kanban board ${boardPath}`
+					);
 				}
 				return false;
 			}
-			
+
 			// Get the target column name
-			const targetColumn = this.plugin.settings.autoAddKanbanColumn || "Todo";
-			
+			const targetColumn =
+				this.plugin.settings.autoAddKanbanColumn || "Todo";
+
 			// Parse the Kanban board to find the column
 			const kanbanColumns = this.parseKanbanBoard(boardContent);
 			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Could not parse Kanban board structure in ${boardPath}`);
+					console.log(
+						`Could not parse Kanban board structure in ${boardPath}`
+					);
 				}
 				return false;
 			}
-			
+
 			// Find the exact or closest column match
 			let targetColumnName = Object.keys(kanbanColumns).find(
 				(name) => name.toLowerCase() === targetColumn.toLowerCase()
 			);
-			
+
 			if (!targetColumnName) {
 				targetColumnName = this.findClosestColumnName(
 					Object.keys(kanbanColumns),
 					targetColumn
 				);
 			}
-			
+
 			if (!targetColumnName) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(
@@ -1953,13 +1953,13 @@ class TaskProgressBarView extends ItemView {
 				}
 				return false;
 			}
-			
+
 			// Find the position to insert the card
 			const columnRegex = new RegExp(
 				`## ${this.escapeRegExp(targetColumnName)}\\s*\\n`
 			);
 			const columnMatch = boardContent.match(columnRegex);
-			
+
 			if (!columnMatch) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(
@@ -1968,24 +1968,26 @@ class TaskProgressBarView extends ItemView {
 				}
 				return false;
 			}
-			
+
 			const insertPosition = columnMatch.index! + columnMatch[0].length;
-			
+
 			// Create card text with link to the file
 			const cardText = `- [[${file.basename}]]\n`;
-			
+
 			// Insert the card
-			const newContent = 
+			const newContent =
 				boardContent.substring(0, insertPosition) +
 				cardText +
 				boardContent.substring(insertPosition);
-			
+
 			// Update the file
 			await this.plugin.app.vault.modify(kanbanFile as TFile, newContent);
-			
+
 			// Show notice
-			new Notice(`Added ${file.basename} to "${targetColumnName}" column in ${kanbanFile.basename}`);
-			
+			new Notice(
+				`Added ${file.basename} to "${targetColumnName}" column in ${kanbanFile.basename}`
+			);
+
 			return true;
 		} catch (error) {
 			console.error("Error adding file to Kanban board:", error);
@@ -1995,15 +1997,15 @@ class TaskProgressBarView extends ItemView {
 			return false;
 		}
 	}
-}	
+}
 
-class TaskProgressBarSettingTab extends PluginSettingTab { 
-	plugin: TaskProgressBarPlugin;	
+class TaskProgressBarSettingTab extends PluginSettingTab {
+	plugin: TaskProgressBarPlugin;
 
 	constructor(app: App, plugin: TaskProgressBarPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
-	}		
+	}
 
 	display(): void {
 		const { containerEl } = this;
@@ -2764,7 +2766,9 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		if (this.plugin.settings.autoAddToKanban) {
 			new Setting(containerEl)
 				.setName("Target Kanban board")
-				.setDesc("The path to the Kanban board where files should be added")
+				.setDesc(
+					"The path to the Kanban board where files should be added"
+				)
 				.addText((text) =>
 					text
 						.setPlaceholder("path/to/kanban.md")
@@ -2778,11 +2782,11 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			// Add file picker button
 			containerEl.createEl("div", {
 				text: "Select Kanban board file:",
-				attr: { style: "margin-left: 36px; margin-bottom: 8px;" }
+				attr: { style: "margin-left: 36px; margin-bottom: 8px;" },
 			});
 
 			const filePickerContainer = containerEl.createEl("div", {
-				attr: { style: "margin-left: 36px; margin-bottom: 12px;" }
+				attr: { style: "margin-left: 36px; margin-bottom: 12px;" },
 			});
 
 			const filePickerButton = filePickerContainer.createEl("button", {
@@ -2804,14 +2808,18 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 					};
 					modal.open();
 				} catch (error) {
-					new Notice("Error opening file picker. Please enter the path manually.");
+					new Notice(
+						"Error opening file picker. Please enter the path manually."
+					);
 					console.error("File picker error:", error);
 				}
 			});
 
 			new Setting(containerEl)
 				.setName("Target column")
-				.setDesc("The column where new files should be added (e.g., 'Todo', 'Backlog')")
+				.setDesc(
+					"The column where new files should be added (e.g., 'Todo', 'Backlog')"
+				)
 				.addText((text) =>
 					text
 						.setPlaceholder("Todo")
@@ -2837,35 +2845,35 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 // Helper class for file picking
 class FileSuggestModal extends SuggestModal<TFile> {
-  plugin: TaskProgressBarPlugin;
-  onChooseItem: (file: TFile) => void;
-  
-  constructor(app: App, plugin: TaskProgressBarPlugin) {
-    super(app);
-    this.plugin = plugin;
-    this.onChooseItem = () => {}; // Default empty implementation
-  }
-  
-  getSuggestions(query: string): TFile[] {
-    const files = this.app.vault.getMarkdownFiles();
-    // Filter to only show potential Kanban board files
-    const kanbanFiles = files.filter(file => {
-      // Show all Markdown files when no query
-      if (!query) return true;
-      // Otherwise filter by name/path containing the query
-      return file.path.toLowerCase().includes(query.toLowerCase());
-    });
-    return kanbanFiles;
-  }
-  
-  renderSuggestion(file: TFile, el: HTMLElement) {
-    el.createEl("div", { text: file.path });
-  }
-  
-  // Implement the required abstract method
-  onChooseSuggestion(file: TFile, evt: MouseEvent | KeyboardEvent) {
-    if (this.onChooseItem) {
-      this.onChooseItem(file);
-    }
-  }
+	plugin: TaskProgressBarPlugin;
+	onChooseItem: (file: TFile) => void;
+
+	constructor(app: App, plugin: TaskProgressBarPlugin) {
+		super(app);
+		this.plugin = plugin;
+		this.onChooseItem = () => {}; // Default empty implementation
+	}
+
+	getSuggestions(query: string): TFile[] {
+		const files = this.app.vault.getMarkdownFiles();
+		// Filter to only show potential Kanban board files
+		const kanbanFiles = files.filter((file) => {
+			// Show all Markdown files when no query
+			if (!query) return true;
+			// Otherwise filter by name/path containing the query
+			return file.path.toLowerCase().includes(query.toLowerCase());
+		});
+		return kanbanFiles;
+	}
+
+	renderSuggestion(file: TFile, el: HTMLElement) {
+		el.createEl("div", { text: file.path });
+	}
+
+	// Implement the required abstract method
+	onChooseSuggestion(file: TFile, evt: MouseEvent | KeyboardEvent) {
+		if (this.onChooseItem) {
+			this.onChooseItem(file);
+		}
+	}
 }
