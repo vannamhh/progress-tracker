@@ -1241,8 +1241,10 @@ class TaskProgressBarView extends ItemView {
 		targetStatus: string
 	): Promise<string> {
 		try {
+			// Wait for MetadataCache to update
+			await this.waitForCacheUpdate(fileToMove);
 			// Parse the Kanban board structure
-			const kanbanColumns = this.parseKanbanBoard(boardContent);
+			const kanbanColumns = await this.parseKanbanBoard(boardFile);
 			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(
@@ -1698,72 +1700,89 @@ class TaskProgressBarView extends ItemView {
 	/**
 	 * Parse Kanban board structure into columns and items with improved accuracy
 	 */
-	private parseKanbanBoard(
-		content: string
-	): Record<string, { items: Array<{ text: string }> }> {
+	private async parseKanbanBoard(
+		file: TFile
+	): Promise<Record<string, { items: Array<{ text: string }> }>> {
 		const kanban: Record<string, { items: Array<{ text: string }> }> = {};
 
-		// Check if this is a Kanban plugin file by looking for the YAML marker
-		const isKanbanPlugin = content.includes("---\n\nkanban-plugin: basic");
-
-		// Split content by H2 headers to get columns
-		const columnHeaders = content.match(/^## .+$/gm) || [];
-
-		if (columnHeaders.length < 1) {
-			return kanban;
-		}
-
-		// Extract content between column headers
-		for (let i = 0; i < columnHeaders.length; i++) {
-			const columnHeader = columnHeaders[i];
-			const columnName = columnHeader.substring(3).trim();
-
-			// Find the start position of this column
-			const columnStart = content.indexOf(columnHeader);
-			if (columnStart === -1) continue;
-
-			// Find the end position of this column (start of next column or end of file)
-			const nextColumnStart =
-				i < columnHeaders.length - 1
-					? content.indexOf(
-							columnHeaders[i + 1],
-							columnStart + columnHeader.length
-					  )
-					: content.length;
-
-			// Extract column content
-			const columnContent = content
-				.substring(columnStart + columnHeader.length, nextColumnStart)
-				.trim();
-
-			kanban[columnName] = { items: [] };
-
-			// Extract items from column content
-			if (isKanbanPlugin) {
-				// For Kanban plugin format
-				this.extractKanbanPluginItems(
-					columnContent,
-					kanban[columnName].items
-				);
-			} else {
-				// For regular markdown format
-				this.extractMarkdownItems(
-					columnContent,
-					kanban[columnName].items
-				);
+		try {
+			// Use MetadataCache to get frontmatter and headers
+			const fileCache = this.app.metadataCache.getFileCache(file);
+			if (!fileCache) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`No cache found for file: ${file.path}`);
+				}
+				return kanban;
 			}
-		}
 
-		if (this.plugin.settings.showDebugInfo) {
-			console.log(
-				"Parsed Kanban board with columns:",
-				Object.keys(kanban)
-			);
-			Object.entries(kanban).forEach(([column, data]) => {
+			// Check if this is a Kanban plugin file using frontmatter
+			const isKanbanPlugin =
+				fileCache.frontmatter?.["kanban-plugin"] === "basic";
+
+			// Get H2 headers (level 2) to identify columns
+			const columnHeaders =
+				fileCache.headings?.filter((h) => h.level === 2) || [];
+			if (columnHeaders.length < 1) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`No H2 headers found in file: ${file.path}`);
+				}
+				return kanban;
+			}
+
+			// Read file content only when necessary to extract items
+			const content = await this.plugin.app.vault.read(file);
+
+			// Process each column
+			for (let i = 0; i < columnHeaders.length; i++) {
+				const columnHeader = columnHeaders[i];
+				const columnName = columnHeader.heading.trim();
+				kanban[columnName] = { items: [] };
+
+				// Determine column boundaries using header positions
+				const columnStart = columnHeader.position.start.offset;
+				const columnEnd =
+					i < columnHeaders.length - 1
+						? columnHeaders[i + 1].position.start.offset
+						: content.length;
+
+				// Extract column content
+				const columnContent = content
+					.substring(
+						columnStart + columnHeader.heading.length + 4,
+						columnEnd
+					)
+					.trim(); // +4 accounts for "## " and newline
+
+				// Extract items based on format
+				if (isKanbanPlugin) {
+					this.extractKanbanPluginItems(
+						columnContent,
+						kanban[columnName].items
+					);
+				} else {
+					this.extractMarkdownItems(
+						columnContent,
+						kanban[columnName].items
+					);
+				}
+			}
+
+			if (this.plugin.settings.showDebugInfo) {
 				console.log(
-					`Column "${column}" has ${data.items.length} items`
+					`Parsed Kanban board ${file.path} with columns:`,
+					Object.keys(kanban)
 				);
-			});
+				Object.entries(kanban).forEach(([column, data]) => {
+					console.log(
+						`Column "${column}" has ${data.items.length} items`
+					);
+				});
+			}
+		} catch (error) {
+			console.error(`Error parsing Kanban board ${file.path}:`, error);
+			if (this.plugin.settings.showDebugInfo) {
+				console.error("Error details:", error);
+			}
 		}
 
 		return kanban;
@@ -1983,8 +2002,10 @@ class TaskProgressBarView extends ItemView {
 			const targetColumn =
 				this.plugin.settings.autoAddKanbanColumn || "Todo";
 
+			// Wait for MetadataCache to update
+			await this.waitForCacheUpdate(file);
 			// Parse the Kanban board to find the column
-			const kanbanColumns = this.parseKanbanBoard(boardContent);
+			const kanbanColumns = await this.parseKanbanBoard(kanbanFile);
 			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
 				if (this.plugin.settings.showDebugInfo) {
 					console.log(
