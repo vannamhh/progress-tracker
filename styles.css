@@ -348,3 +348,9 @@ If your plugin does not need CSS, delete this file.
 .workspace-leaf-content[data-type="progress-tracker"] .view-content {
   overflow: hidden;
 }
+
+/* Ensure content fits within constrained height */
+.progress-tracker-leaf .task-progress-container {
+  padding: 8px;
+  margin: 0;
+}

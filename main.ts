@@ -437,21 +437,20 @@ export default class TaskProgressBarPlugin extends Plugin {
 			const style = document.createElement("style");
 			style.id = "progress-tracker-max-tabs-height";
 
-			// Set the CSS rule with the user's preference
-			style.textContent = `
-				.mod-sidedock .workspace-tabs:not(.mod-top-left-space) {
-					max-height: ${this.settings.maxTabsHeight} !important;
-					transition: max-height 0.3s ease;
-				}
-			`;
-
-			// Add the style to the document head
-			document.head.appendChild(style);
-
+			// Target only workspace-tabs containing our plugin view
+			if (!this.settings.showDebugInfo) {
+				style.textContent = `
+					.workspace-tabs.mod-top:has(.progress-tracker-leaf) {
+						max-height: ${this.settings.maxTabsHeight} !important;
+					}
+				`;
+				// Add the style to the document head
+				document.head.appendChild(style);
+			}
 			// Debug info
 			if (this.settings.showDebugInfo) {
 				console.log(
-					`Applied max-tabs-height: ${this.settings.maxTabsHeight}`
+					`Applied max-tabs-height: ${this.settings.maxTabsHeight} to Progress Tracker view`
 				);
 			}
 		} catch (error) {
@@ -489,6 +488,13 @@ class TaskProgressBarView extends ItemView {
 	async onOpen() {
 		this.isVisible = true;
 		this.initialLoadComplete = false;
+
+		// Add custom class to parent workspace-leaf
+		const leaf = this.leaf as any;
+		if (leaf && leaf.containerEl) {
+			leaf.containerEl.addClass("progress-tracker-leaf");
+		}
+
 		const container = this.containerEl.children[1];
 		container.empty();
 
@@ -502,9 +508,6 @@ class TaskProgressBarView extends ItemView {
 			text: "Loading task progress...",
 			cls: "loading-indicator",
 		});
-
-		// For initial load, we'll wait for the main plugin to trigger the update
-		// rather than trying to load here, to avoid duplicate loading issues
 	}
 
 	async updateProgressBar(
