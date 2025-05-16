@@ -1,7 +1,7 @@
 {
 	"id": "progress-tracker",
 	"name": "ProgressTracker",
-	"version": "1.2.2",
+	"version": "1.2.3",
 	"minAppVersion": "1.1.0",
 	"description": "Track task completion with a visual progress bar in your sidebar, auto update column Kanban",
 	"author": "VN",

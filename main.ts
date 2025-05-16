@@ -1178,9 +1178,80 @@ class TaskProgressBarView extends ItemView {
 			return 0;
 		}
 
+		let updatedBoardCount = 0;
+
+		// Nếu có target board được chọn trong settings, chỉ xử lý board đó
+		if (this.plugin.settings.autoAddKanbanBoard) {
+			const targetBoard = this.plugin.app.vault.getAbstractFileByPath(
+				this.plugin.settings.autoAddKanbanBoard
+			);
+
+			if (targetBoard instanceof TFile) {
+				// Skip if trying to update the target file itself
+				if (targetBoard.path === file.path) {
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							`Skipping target board as it's the file being updated: ${file.path}`
+						);
+					}
+					return 0;
+				}
+
+				// Read and process the target board
+				const boardContent = await this.plugin.app.vault.read(targetBoard);
+
+				// Skip if not a Kanban board or doesn't reference our file
+				if (
+					!this.isKanbanBoard(targetBoard) ||
+					!this.containsFileReference(boardContent, file)
+				) {
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							`Target board ${targetBoard.path} is not a valid Kanban board or doesn't reference ${file.path}`
+						);
+					}
+					return 0;
+				}
+
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Processing target Kanban board: ${targetBoard.path}`
+					);
+				}
+
+				// Update the Kanban board
+				const updatedContent = await this.moveCardInKanbanBoard(
+					targetBoard,
+					boardContent,
+					file,
+					currentStatus
+				);
+
+				// If the board was updated, increment the counter
+				if (updatedContent !== boardContent) {
+					updatedBoardCount++;
+				}
+
+				return updatedBoardCount;
+			} else {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(
+						`Target board not found: ${this.plugin.settings.autoAddKanbanBoard}`
+					);
+				}
+				return 0;
+			}
+		}
+
+		// Nếu không có target board, tìm tất cả các board có thể
+		if (this.plugin.settings.showDebugInfo) {
+			console.log(
+				`No target board set, searching all potential Kanban boards...`
+			);
+		}
+
 		// Get all markdown files that might be Kanban boards
 		const markdownFiles = this.plugin.app.vault.getMarkdownFiles();
-		let updatedBoardCount = 0;
 
 		// Check each potential Kanban board file
 		for (const boardFile of markdownFiles) {
