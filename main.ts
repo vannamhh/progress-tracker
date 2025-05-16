@@ -103,10 +103,10 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	mediumProgressThreshold: 66,
 	highProgressThreshold: 99,
 	showUpdateAnimation: true,
-	updateAnimationDelay: 300,
-	editorChangeDelay: 500,
-	keyboardInputDelay: 100,
-	checkboxClickDelay: 200,
+	updateAnimationDelay: 150, // Giảm từ 300ms xuống 150ms
+	editorChangeDelay: 200, // Giảm từ 500ms xuống 200ms
+	keyboardInputDelay: 50, // Giảm từ 100ms xuống 50ms
+	checkboxClickDelay: 100, // Giảm từ 200ms xuống 100ms
 	maxTabsHeight: "auto",
 	autoUpdateMetadata: true,
 	autoChangeStatus: true,
@@ -162,14 +162,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 				if (file) {
 					this.lastActiveFile = file;
 
-					// Always update when file changes to ensure accurate display
+					// Giảm delay từ 300ms xuống 100ms
 					setTimeout(async () => {
 						await this.updateLastFileContent(file);
 						if (this.sidebarView) {
 							// Pass true to force update even for files without tasks
 							this.sidebarView.updateProgressBar(file);
 						}
-					}, 300);
+					}, 100);
 				}
 			})
 		);
@@ -698,172 +698,12 @@ class TaskProgressBarView extends ItemView {
 
 			const percentage = Math.round((completedCount / totalTasks) * 100);
 
-			// Update status based on progress percentage (do this for all files)
-			let statusChanged = false;
-			if (this.plugin.settings.autoChangeStatus) {
-				statusChanged = await this.updateStatusBasedOnProgress(
-					file,
-					percentage
-				);
-			}
+			// Update UI first for better responsiveness
+			this.updateProgressBarUI(container, percentage, completedCount, totalTasks);
 
-			// Update Kanban boards based on task progress, regardless of whether it's 100%
-			// This ensures any status change gets reflected in the Kanban board
-			if (
-				this.plugin.settings.autoUpdateKanban &&
-				(statusChanged || !this.completedFilesMap.has(file.path))
-			) {
-				await this.updateKanbanBoards(file, completedCount, totalTasks);
-			}
+			// Then process status and Kanban updates asynchronously
+			this.processStatusAndKanbanUpdates(file, percentage, completedCount, totalTasks);
 
-			// Additional special handling for 100% completion
-			if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
-				// Only update metadata and show notification if this file hasn't been marked as completed yet
-				if (!this.completedFilesMap.has(file.path)) {
-					await this.updateFileMetadata(file);
-
-					// Mark this file as completed to avoid repeated updates
-					this.completedFilesMap.set(file.path, true);
-				}
-			} else if (percentage < 100) {
-				// If percentage is less than 100%, remove from completed files map
-				// This allows re-notification if the tasks are completed again after being incomplete
-				if (this.completedFilesMap.has(file.path)) {
-					this.completedFilesMap.delete(file.path);
-				}
-			}
-
-			// Auto-add to Kanban board if enabled and file has tasks
-			if (
-				this.plugin.settings.autoAddToKanban &&
-				this.plugin.settings.autoAddKanbanBoard &&
-				totalTasks > 0 &&
-				!this.completedFilesMap.has(file.path)
-			) {
-				await this.addFileToKanbanBoard(file);
-			}
-
-			// Check if we already have progress elements
-			let progressLayout = container.querySelector(
-				".progress-layout"
-			) as HTMLElement;
-			let statsContainer = container.querySelector(
-				".progress-stats-compact"
-			) as HTMLElement;
-
-			// If no existing elements, create container structure
-			if (!progressLayout || !statsContainer) {
-				container.empty();
-
-				// Create a more compact layout
-				progressLayout = container.createDiv({
-					cls: "progress-layout",
-				});
-
-				// Create percentage text element
-				progressLayout.createEl("div", {
-					cls: "progress-percentage-small",
-				});
-
-				// Create HTML5-like progress bar
-				const progressBarContainer = progressLayout.createDiv({
-					cls: "pt-progress-bar-container",
-				});
-
-				// Create the outer progress element
-				const progressElement = progressBarContainer.createDiv({
-					cls: "progress-element",
-				});
-
-				// Create the inner value element that will be animated
-				progressElement.createDiv({
-					cls: "progress-value",
-				});
-
-				// Create stats container at the bottom
-				statsContainer = container.createDiv({
-					cls: "progress-stats-compact",
-				});
-			}
-
-			// Now update the existing elements with new values
-
-			// Update percentage text
-			const percentageElement = progressLayout.querySelector(
-				".progress-percentage-small"
-			) as HTMLElement;
-			if (percentageElement) {
-				percentageElement.setText(`${percentage}%`);
-			}
-
-			// Update progress bar width with smooth transition
-			const progressValue = container.querySelector(
-				".progress-value"
-			) as HTMLElement;
-			if (progressValue) {
-				// Add transition style if not already present
-				if (!progressValue.hasAttribute("data-has-transition")) {
-					progressValue.style.transition =
-						"width 0.3s ease-in-out, background-color 0.3s ease";
-					progressValue.setAttribute("data-has-transition", "true");
-				}
-				progressValue.style.width = `${percentage}%`;
-				this.applyProgressColor(progressValue, percentage);
-			}
-
-			// Update progress element data attribute
-			const progressElement = container.querySelector(
-				".progress-element"
-			) as HTMLElement;
-			if (progressElement) {
-				progressElement.setAttribute(
-					"data-percentage",
-					percentage.toString()
-				);
-			}
-
-			// Update stats text
-			if (statsContainer) {
-				statsContainer.empty();
-				statsContainer.createSpan({
-					text: `${completedCount}/${totalTasks} tasks`,
-				});
-			}
-
-			// Update debug info if needed
-			if (this.plugin.settings.showDebugInfo) {
-				let debugInfo = container.querySelector(
-					".debug-info"
-				) as HTMLElement;
-				if (!debugInfo) {
-					debugInfo = container.createDiv({ cls: "debug-info" });
-				} else {
-					debugInfo.empty();
-				}
-
-				debugInfo.createEl("p", { text: `Debug info:` });
-				debugInfo.createEl("p", {
-					text: `File: ${this.currentFile?.path}`,
-				});
-				debugInfo.createEl("p", {
-					text: `Incomplete tasks: ${totalTasks - completedCount}`,
-				});
-				debugInfo.createEl("p", {
-					text: `Completed tasks: ${completedCount}`,
-				});
-				debugInfo.createEl("p", { text: `Total tasks: ${totalTasks}` });
-				debugInfo.createEl("p", { text: `Percentage: ${percentage}%` });
-				debugInfo.createEl("p", {
-					text: `Update time: ${new Date().toISOString()}`,
-				});
-				debugInfo.createEl("p", {
-					text: `Color scheme: ${this.plugin.settings.progressColorScheme}`,
-				});
-			} else {
-				// Remove debug info if it exists but debug is disabled
-				const debugInfo = container.querySelector(".debug-info");
-				if (debugInfo) debugInfo.remove();
-			}
 		} catch (error) {
 			console.error("Error creating progress bar from string:", error);
 			container.empty();
@@ -871,6 +711,198 @@ class TaskProgressBarView extends ItemView {
 				text: `Error creating progress bar: ${error.message}`,
 			});
 		}
+	}
+
+	/**
+	 * Update progress bar UI elements
+	 */
+	private updateProgressBarUI(
+		container: HTMLElement,
+		percentage: number,
+		completedCount: number,
+		totalTasks: number
+	) {
+		// Check if we already have progress elements
+		let progressLayout = container.querySelector(
+			".progress-layout"
+		) as HTMLElement;
+		let statsContainer = container.querySelector(
+			".progress-stats-compact"
+		) as HTMLElement;
+
+		// If no existing elements, create container structure
+		if (!progressLayout || !statsContainer) {
+			container.empty();
+
+			// Create a more compact layout
+			progressLayout = container.createDiv({
+				cls: "progress-layout",
+			});
+
+			// Create percentage text element
+			progressLayout.createEl("div", {
+				cls: "progress-percentage-small",
+			});
+
+			// Create HTML5-like progress bar
+			const progressBarContainer = progressLayout.createDiv({
+				cls: "pt-progress-bar-container",
+			});
+
+			// Create the outer progress element
+			const progressElement = progressBarContainer.createDiv({
+				cls: "progress-element",
+			});
+
+			// Create the inner value element that will be animated
+			progressElement.createDiv({
+				cls: "progress-value",
+			});
+
+			// Create stats container at the bottom
+			statsContainer = container.createDiv({
+				cls: "progress-stats-compact",
+			});
+		}
+
+		// Update percentage text
+		const percentageElement = progressLayout.querySelector(
+			".progress-percentage-small"
+		) as HTMLElement;
+		if (percentageElement) {
+			percentageElement.setText(`${percentage}%`);
+		}
+
+		// Update progress bar width with smooth transition
+		const progressValue = container.querySelector(
+			".progress-value"
+		) as HTMLElement;
+		if (progressValue) {
+			// Add transition style if not already present
+			if (!progressValue.hasAttribute("data-has-transition")) {
+				progressValue.style.transition =
+					"width 0.3s ease-in-out, background-color 0.3s ease";
+				progressValue.setAttribute("data-has-transition", "true");
+			}
+			progressValue.style.width = `${percentage}%`;
+			this.applyProgressColor(progressValue, percentage);
+		}
+
+		// Update progress element data attribute
+		const progressElement = container.querySelector(
+			".progress-element"
+		) as HTMLElement;
+		if (progressElement) {
+			progressElement.setAttribute(
+				"data-percentage",
+				percentage.toString()
+			);
+		}
+
+		// Update stats text
+		if (statsContainer) {
+			statsContainer.empty();
+			statsContainer.createSpan({
+				text: `${completedCount}/${totalTasks} tasks`,
+			});
+		}
+
+		// Update debug info if needed
+		if (this.plugin.settings.showDebugInfo) {
+			let debugInfo = container.querySelector(
+				".debug-info"
+			) as HTMLElement;
+			if (!debugInfo) {
+				debugInfo = container.createDiv({ cls: "debug-info" });
+			} else {
+				debugInfo.empty();
+			}
+
+			debugInfo.createEl("p", { text: `Debug info:` });
+			debugInfo.createEl("p", {
+				text: `File: ${this.currentFile?.path}`,
+			});
+			debugInfo.createEl("p", {
+				text: `Incomplete tasks: ${totalTasks - completedCount}`,
+			});
+			debugInfo.createEl("p", {
+				text: `Completed tasks: ${completedCount}`,
+			});
+			debugInfo.createEl("p", { text: `Total tasks: ${totalTasks}` });
+			debugInfo.createEl("p", { text: `Percentage: ${percentage}%` });
+			debugInfo.createEl("p", {
+				text: `Update time: ${new Date().toISOString()}`,
+			});
+			debugInfo.createEl("p", {
+				text: `Color scheme: ${this.plugin.settings.progressColorScheme}`,
+			});
+		} else {
+			// Remove debug info if it exists but debug is disabled
+			const debugInfo = container.querySelector(".debug-info");
+			if (debugInfo) debugInfo.remove();
+		}
+	}
+
+	/**
+	 * Process status and Kanban updates asynchronously
+	 */
+	private async processStatusAndKanbanUpdates(
+		file: TFile,
+		percentage: number,
+		completedCount: number,
+		totalTasks: number
+	) {
+		// Use setTimeout to process these updates in the next tick
+		setTimeout(async () => {
+			try {
+				// Update status based on progress percentage
+				let statusChanged = false;
+				if (this.plugin.settings.autoChangeStatus) {
+					statusChanged = await this.updateStatusBasedOnProgress(
+						file,
+						percentage
+					);
+				}
+
+				// Update Kanban boards based on task progress
+				if (
+					this.plugin.settings.autoUpdateKanban &&
+					(statusChanged || !this.completedFilesMap.has(file.path))
+				) {
+					await this.updateKanbanBoards(file, completedCount, totalTasks);
+				}
+
+				// Additional special handling for 100% completion
+				if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
+					// Only update metadata and show notification if this file hasn't been marked as completed yet
+					if (!this.completedFilesMap.has(file.path)) {
+						await this.updateFileMetadata(file);
+						// Mark this file as completed to avoid repeated updates
+						this.completedFilesMap.set(file.path, true);
+					}
+				} else if (percentage < 100) {
+					// If percentage is less than 100%, remove from completed files map
+					if (this.completedFilesMap.has(file.path)) {
+						this.completedFilesMap.delete(file.path);
+					}
+				}
+
+				// Auto-add to Kanban board if enabled and file has tasks
+				if (
+					this.plugin.settings.autoAddToKanban &&
+					this.plugin.settings.autoAddKanbanBoard &&
+					totalTasks > 0 &&
+					!this.completedFilesMap.has(file.path)
+				) {
+					await this.addFileToKanbanBoard(file);
+				}
+			} catch (error) {
+				console.error("Error in status and Kanban updates:", error);
+				if (this.plugin.settings.showDebugInfo) {
+					console.error("Error details:", error);
+				}
+			}
+		}, 0);
 	}
 
 	// Method to apply color based on percentage and settings - keep logic but add smooth transition
