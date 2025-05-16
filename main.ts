@@ -1206,30 +1206,83 @@ class TaskProgressBarView extends ItemView {
 		const filePathWithoutExtension = filePath.replace(/\.md$/, "");
 		const fileName = file.basename;
 
-		// Check for common reference patterns
-		const patterns = [
-			// Markdown link: [Note Title](path/to/note.md)
-			new RegExp(`\\[.*?\\]\\(${this.escapeRegExp(filePath)}\\)`, "i"),
-			// Obsidian link: [[path/to/note]]
-			new RegExp(
-				`\\[\\[${this.escapeRegExp(
-					filePathWithoutExtension
-				)}(\\|.*?)?\\]\\]`,
-				"i"
-			),
-			// Obsidian link with just filename: [[Note Title]]
-			new RegExp(
-				`\\[\\[${this.escapeRegExp(fileName)}(\\|.*?)?\\]\\]`,
-				"i"
-			),
-			// Plain text mention of filepath
-			new RegExp(`\\b${this.escapeRegExp(filePath)}\\b`, "i"),
-			// Plain text mention of filename
-			new RegExp(`\\b${this.escapeRegExp(fileName)}\\b`, "i"),
-		];
+		// First try to find exact matches in Obsidian-style links
+		const obsidianLinks = this.extractObsidianLinks(boardContent);
+		for (const link of obsidianLinks) {
+			const { path, alias } = link;
+			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Found exact Obsidian link match for ${fileName}: ${path}`);
+				}
+				return true;
+			}
+		}
 
-		// Return true if any pattern matches
-		return patterns.some((pattern) => pattern.test(boardContent));
+		// Then check for Markdown-style links
+		const markdownLinks = this.extractMarkdownLinks(boardContent);
+		for (const link of markdownLinks) {
+			const { text, url } = link;
+			if (url === filePath || url === filePathWithoutExtension) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Found exact Markdown link match for ${fileName}: ${url}`);
+				}
+				return true;
+			}
+		}
+
+		// Finally check for exact filepath mentions (with strict boundaries)
+		const filepathPattern = new RegExp(`(?:^|\\s|\\()${this.escapeRegExp(filePath)}(?:$|\\s|\\))`, "i");
+		if (filepathPattern.test(boardContent)) {
+			if (this.plugin.settings.showDebugInfo) {
+				console.log(`Found exact filepath match for ${filePath}`);
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Extract all Obsidian-style links from content
+	 * Returns array of {path, alias} objects
+	 */
+	private extractObsidianLinks(content: string): Array<{path: string, alias?: string}> {
+		const links: Array<{path: string, alias?: string}> = [];
+		const linkPattern = /\[\[(.*?)\]\]/g;
+		let match;
+
+		while ((match = linkPattern.exec(content)) !== null) {
+			const [_, linkContent] = match;
+			const [path, alias] = linkContent.split("|").map(s => s.trim());
+			links.push({ path, alias });
+		}
+
+		if (this.plugin.settings.showDebugInfo) {
+			console.log("Extracted Obsidian links:", links);
+		}
+
+		return links;
+	}
+
+	/**
+	 * Extract all Markdown-style links from content
+	 * Returns array of {text, url} objects
+	 */
+	private extractMarkdownLinks(content: string): Array<{text: string, url: string}> {
+		const links: Array<{text: string, url: string}> = [];
+		const linkPattern = /\[(.*?)\]\((.*?)\)/g;
+		let match;
+
+		while ((match = linkPattern.exec(content)) !== null) {
+			const [_, text, url] = match;
+			links.push({ text: text.trim(), url: url.trim() });
+		}
+
+		if (this.plugin.settings.showDebugInfo) {
+			console.log("Extracted Markdown links:", links);
+		}
+
+		return links;
 	}
 
 	/**
@@ -1303,168 +1356,85 @@ class TaskProgressBarView extends ItemView {
 				);
 			}
 
-			// Look for the card containing reference to our file in each column
+			// Process each column to find and move the card
 			let cardMoved = false;
 			let newContent = boardContent;
 
-			// Build file reference pattern options for searching
-			const filePath = fileToMove.path;
-			const filePathWithoutExtension = filePath.replace(/\.md$/, "");
-			const fileName = fileToMove.basename;
+			// Split content into lines for more accurate processing
+			const lines = newContent.split("\n");
+			let currentColumn = "";
+			let cardStartIndex = -1;
+			let cardEndIndex = -1;
 
-			// Patterns to match different kinds of file references in cards
-			const fileRefPatterns = [
-				`\\[.*?\\]\\(${this.escapeRegExp(filePath)}\\)`,
-				`\\[\\[${this.escapeRegExp(
-					filePathWithoutExtension
-				)}(\\|.*?)?\\]\\]`,
-				`\\[\\[${this.escapeRegExp(fileName)}(\\|.*?)?\\]\\]`,
-				`\\b${this.escapeRegExp(filePath)}\\b`,
-				`\\b${this.escapeRegExp(fileName)}\\b`,
-			];
+			// First pass: Find the exact card that references our file
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
 
-			// Join patterns with OR for combined search
-			const fileRefRegex = new RegExp(fileRefPatterns.join("|"), "i");
-
-			// Process each column
-			for (const columnName in kanbanColumns) {
-				// Skip the target column - we don't need to move items already there
-				if (
-					columnName.toLowerCase() === targetColumnName.toLowerCase()
-				) {
+				// Check for column header
+				if (line.startsWith("## ")) {
+					currentColumn = line.substring(3).trim();
 					continue;
 				}
 
-				const column = kanbanColumns[columnName];
+				// Skip if we're already in target column
+				if (currentColumn.toLowerCase() === targetColumnName.toLowerCase()) {
+					continue;
+				}
 
-				// Check each card in the column
-				for (let i = 0; i < column.items.length; i++) {
-					const card = column.items[i];
-
+				// Check if line is a card (starts with "- ")
+				if (line.trim().startsWith("- ")) {
+					// Extract the card content
+					const cardContent = this.getCompleteCardContent(lines, i);
+					
 					// Check if this card references our file
-					if (fileRefRegex.test(card.text)) {
-						if (this.plugin.settings.showDebugInfo) {
-							console.log(
-								`Found card in column "${columnName}" that references file ${fileToMove.path}`
-							);
-						}
+					if (this.isExactCardForFile(cardContent.content, fileToMove)) {
+						cardStartIndex = i;
+						cardEndIndex = i + cardContent.lineCount - 1;
+						break;
+					}
+					
+					// Skip to end of card
+					i += cardContent.lineCount - 1;
+				}
+			}
 
-						// Remove this card from its current position
-						// Find this card's position in the file content
-						const columnRegex = new RegExp(
-							`## ${this.escapeRegExp(columnName)}\\s*\\n`
-						);
-						const columnMatch = newContent.match(columnRegex);
+			// If we found the card, move it
+			if (cardStartIndex !== -1 && cardEndIndex !== -1) {
+				// Extract the card content
+				const cardLines = lines.slice(cardStartIndex, cardEndIndex + 1);
+				
+				// Remove the card from its current position
+				lines.splice(cardStartIndex, cardEndIndex - cardStartIndex + 1);
 
-						if (!columnMatch) continue;
-
-						const columnStart = columnMatch.index!;
-						const columnHeaderEnd =
-							columnStart + columnMatch[0].length;
-
-						// Find the next column or the end of file
-						const nextColumnRegex = /^## /gm;
-						nextColumnRegex.lastIndex = columnHeaderEnd;
-						const nextColumnMatch =
-							nextColumnRegex.exec(newContent);
-						const columnEnd = nextColumnMatch
-							? nextColumnMatch.index
-							: newContent.length;
-
-						// Get this column's content
-						const columnContent = newContent.substring(
-							columnHeaderEnd,
-							columnEnd
-						);
-
-						// Try to find the card in the column
-						const cleanCardText = this.escapeRegExp(
-							card.text.trim()
-						);
-						const cardRegex = new RegExp(
-							`(^|\\n)(${cleanCardText})(\\n|$)`
-						);
-						const cardMatch = columnContent.match(cardRegex);
-
-						if (!cardMatch) {
-							if (this.plugin.settings.showDebugInfo) {
-								console.log(
-									`Could not find card in column ${columnName}`
-								);
-							}
-							continue;
-						}
-
-						// Calculate absolute positions in the whole content
-						const cardStart =
-							columnHeaderEnd +
-							cardMatch.index! +
-							(cardMatch[1] === "\n" ? 1 : 0);
-						const cardEnd = cardStart + card.text.length;
-
-						// Safety check - don't remove a card if our indices are wrong
-						if (
-							cardEnd <= cardStart ||
-							cardStart < 0 ||
-							cardEnd > newContent.length
-						) {
-							console.error(
-								`Invalid card position: start=${cardStart}, end=${cardEnd}, contentLength=${newContent.length}`
-							);
-							continue;
-						}
-
-						// Remove this card from its current column
-						const beforeCard = newContent.substring(0, cardStart);
-						const afterCard = newContent.substring(cardEnd);
-
-						// Handle newlines correctly
-						newContent = beforeCard + afterCard;
-
-						// Find the target column
-						const targetColumnRegex = new RegExp(
-							`## ${this.escapeRegExp(targetColumnName)}\\s*\\n`
-						);
-						const targetColumnMatch =
-							newContent.match(targetColumnRegex);
-
-						if (!targetColumnMatch) continue;
-
-						const targetInsertPosition =
-							targetColumnMatch.index! +
-							targetColumnMatch[0].length;
-
-						// Insert the card at the beginning of the target column
-						newContent =
-							newContent.substring(0, targetInsertPosition) +
-							card.text +
-							"\n" +
-							newContent.substring(targetInsertPosition);
-
-						cardMoved = true;
-
-						if (this.plugin.settings.showDebugInfo) {
-							console.log(
-								`Moved card for ${fileToMove.path} from "${columnName}" to "${targetColumnName}" in ${boardFile.path}`
-							);
-						}
-
-						// Break once we've found and moved the card
+				// Find the target column and insert the card
+				let targetInsertIndex = -1;
+				for (let i = 0; i < lines.length; i++) {
+					if (lines[i].startsWith(`## ${targetColumnName}`)) {
+						targetInsertIndex = i + 1;
 						break;
 					}
 				}
 
-				// If we've moved the card, no need to check other columns
-				if (cardMoved) break;
+				if (targetInsertIndex !== -1) {
+					// Insert the card at the beginning of the target column
+					lines.splice(targetInsertIndex, 0, ...cardLines);
+					cardMoved = true;
+
+					if (this.plugin.settings.showDebugInfo) {
+						console.log(
+							`Moved card for ${fileToMove.path} to column "${targetColumnName}" in ${boardFile.path}`
+						);
+					}
+				}
 			}
 
-			// Update the file if changes were made
-			if (cardMoved && newContent !== boardContent) {
+			// If card was moved, update the file
+			if (cardMoved) {
+				newContent = lines.join("\n");
 				await this.plugin.app.vault.modify(boardFile, newContent);
-				return newContent;
 			}
 
-			return boardContent;
+			return newContent;
 		} catch (error) {
 			console.error("Error moving card in Kanban board:", error);
 			if (this.plugin.settings.showDebugInfo) {
@@ -1472,6 +1442,65 @@ class TaskProgressBarView extends ItemView {
 			}
 			return boardContent;
 		}
+	}
+
+	/**
+	 * Get the complete content of a card, including any sub-items
+	 */
+	private getCompleteCardContent(lines: string[], startIndex: number): { content: string, lineCount: number } {
+		let content = lines[startIndex];
+		let lineCount = 1;
+		
+		// Check subsequent lines for sub-items (indented)
+		for (let i = startIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.trim() === "" || line.startsWith("  ") || line.startsWith("\t")) {
+				content += "\n" + line;
+				lineCount++;
+			} else {
+				break;
+			}
+		}
+		
+		return { content, lineCount };
+	}
+
+	/**
+	 * Check if a card content exactly matches a file reference
+	 */
+	private isExactCardForFile(cardContent: string, file: TFile): boolean {
+		// Extract all links from the card
+		const obsidianLinks = this.extractObsidianLinks(cardContent);
+		const markdownLinks = this.extractMarkdownLinks(cardContent);
+
+		const fileName = file.basename;
+		const filePath = file.path;
+		const filePathWithoutExtension = filePath.replace(/\.md$/, "");
+
+		// Check Obsidian links first
+		for (const link of obsidianLinks) {
+			const { path } = link;
+			// Only match if it's an exact match with the full path or filename
+			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Found exact Obsidian link match in card: ${path} for file: ${fileName}`);
+				}
+				return true;
+			}
+		}
+
+		// Then check Markdown links
+		for (const link of markdownLinks) {
+			const { url } = link;
+			if (url === filePath || url === filePathWithoutExtension) {
+				if (this.plugin.settings.showDebugInfo) {
+					console.log(`Found exact Markdown link match in card: ${url} for file: ${fileName}`);
+				}
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
