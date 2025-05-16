@@ -183,7 +183,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						// Get current editor content
 						const content = editor.getValue();
 
-						// Check if content has changed and contains tasks or old content contains tasks
+						// Kiểm tra xem có task trong nội dung không
 						if (
 							content.includes("- [") ||
 							content.includes("- [ ]") ||
@@ -192,24 +192,28 @@ export default class TaskProgressBarPlugin extends Plugin {
 							this.lastFileContent.includes("- [ ]") ||
 							this.lastFileContent.includes("- [x]")
 						) {
-							// Update immediately
-							if (this.lastActiveFile) {
-								// Update last file content before checking changes
-								this.lastActiveFile = view.file;
+							// Kiểm tra xem task có thay đổi không
+							if (this.hasTaskContentChanged(this.lastFileContent, content)) {
+								if (this.lastActiveFile) {
+									// Update last file content before checking changes
+									this.lastActiveFile = view.file;
 
-								// Update progress bar immediately
-								this.sidebarView.updateProgressBar(
-									view.file,
-									content
-								);
+									// Update progress bar immediately
+									this.sidebarView.updateProgressBar(
+										view.file,
+										content
+									);
 
-								// Then update last file content
-								this.lastFileContent = content;
+									// Then update last file content
+									this.lastFileContent = content;
+								}
+							} else if (this.settings.showDebugInfo) {
+								console.log('Skipping update - no task changes detected');
 							}
 						}
 					}
 				}, this.settings.editorChangeDelay)
-			) // Use configurable delay
+			)
 		);
 
 		// Listen for keydown events to detect when user enters new tasks or checks/unchecks tasks
@@ -233,10 +237,13 @@ export default class TaskProgressBarPlugin extends Plugin {
 					// Update immediately
 					setTimeout(() => {
 						const content = activeView.editor.getValue();
+						
+						// Kiểm tra xem có task trong nội dung không và có thay đổi không
 						if (
-							content.includes("- [") ||
+							(content.includes("- [") ||
 							content.includes("- [ ]") ||
-							content.includes("- [x]")
+							content.includes("- [x]")) &&
+							this.hasTaskContentChanged(this.lastFileContent, content)
 						) {
 							this.lastActiveFile = activeView.file;
 
@@ -251,7 +258,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 							// Then update last file content
 							this.lastFileContent = content;
 						}
-					}, this.settings.keyboardInputDelay); // Use configurable delay
+					}, this.settings.keyboardInputDelay);
 				}
 			}
 		});
@@ -273,14 +280,17 @@ export default class TaskProgressBarPlugin extends Plugin {
 						// Read current file content
 						const content = await this.app.vault.read(activeFile);
 
-						// Update progress bar immediately
-						this.lastActiveFile = activeFile;
-						this.sidebarView.updateProgressBar(activeFile, content);
+						// Chỉ cập nhật nếu có thay đổi trong task
+						if (this.hasTaskContentChanged(this.lastFileContent, content)) {
+							// Update progress bar immediately
+							this.lastActiveFile = activeFile;
+							this.sidebarView.updateProgressBar(activeFile, content);
 
-						// Then update last file content
-						this.lastFileContent = content;
+							// Then update last file content
+							this.lastFileContent = content;
+						}
 					}
-				}, this.settings.checkboxClickDelay); // Use configurable delay
+				}, this.settings.checkboxClickDelay);
 			}
 		});
 
@@ -456,6 +466,42 @@ export default class TaskProgressBarPlugin extends Plugin {
 		} catch (error) {
 			console.error("Error applying max tabs height style:", error);
 		}
+	}
+
+	/**
+	 * Kiểm tra xem nội dung thay đổi có liên quan đến task hay không
+	 */
+	private hasTaskContentChanged(oldContent: string, newContent: string): boolean {
+		// Tách nội dung thành các dòng
+		const oldLines = oldContent.split('\n');
+		const newLines = newContent.split('\n');
+
+		// Tìm các dòng có task trong cả hai nội dung
+		const oldTasks = oldLines.filter(line => line.trim().match(/^[-*] \[[x ]\]/i));
+		const newTasks = newLines.filter(line => line.trim().match(/^[-*] \[[x ]\]/i));
+
+		// So sánh số lượng task
+		if (oldTasks.length !== newTasks.length) {
+			if (this.settings.showDebugInfo) {
+				console.log('Task count changed:', oldTasks.length, '->', newTasks.length);
+			}
+			return true;
+		}
+
+		// So sánh từng task
+		for (let i = 0; i < oldTasks.length; i++) {
+			if (oldTasks[i] !== newTasks[i]) {
+				if (this.settings.showDebugInfo) {
+					console.log('Task content changed:', oldTasks[i], '->', newTasks[i]);
+				}
+				return true;
+			}
+		}
+
+		if (this.settings.showDebugInfo) {
+			console.log('No task-related changes detected');
+		}
+		return false;
 	}
 }
 
