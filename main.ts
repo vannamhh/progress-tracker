@@ -103,10 +103,10 @@ const DEFAULT_SETTINGS: TaskProgressBarSettings = {
 	mediumProgressThreshold: 66,
 	highProgressThreshold: 99,
 	showUpdateAnimation: true,
-	updateAnimationDelay: 150, // Giảm từ 300ms xuống 150ms
-	editorChangeDelay: 200, // Giảm từ 500ms xuống 200ms
-	keyboardInputDelay: 50, // Giảm từ 100ms xuống 50ms
-	checkboxClickDelay: 100, // Giảm từ 200ms xuống 100ms
+	updateAnimationDelay: 150, // Reduced from 300ms to 150ms
+	editorChangeDelay: 200, // Reduced from 500ms to 200ms
+	keyboardInputDelay: 50, // Reduced from 100ms to 50ms
+	checkboxClickDelay: 100, // Reduced from 200ms to 100ms
 	maxTabsHeight: "auto",
 	autoUpdateMetadata: true,
 	autoChangeStatus: true,
@@ -183,7 +183,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						// Get current editor content
 						const content = editor.getValue();
 
-						// Kiểm tra xem có task trong nội dung không
+						// Check if content contains tasks
 						if (
 							content.includes("- [") ||
 							content.includes("- [ ]") ||
@@ -192,7 +192,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 							this.lastFileContent.includes("- [ ]") ||
 							this.lastFileContent.includes("- [x]")
 						) {
-							// Kiểm tra xem task có thay đổi không
+							// Check if tasks have changed
 							if (this.hasTaskContentChanged(this.lastFileContent, content)) {
 								if (this.lastActiveFile) {
 									// Update last file content before checking changes
@@ -238,7 +238,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 					setTimeout(() => {
 						const content = activeView.editor.getValue();
 						
-						// Kiểm tra xem có task trong nội dung không và có thay đổi không
+						// Check if content contains tasks and if they have changed
 						if (
 							(content.includes("- [") ||
 							content.includes("- [ ]") ||
@@ -280,7 +280,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 						// Read current file content
 						const content = await this.app.vault.read(activeFile);
 
-						// Chỉ cập nhật nếu có thay đổi trong task
+						// Only update if tasks have changed
 						if (this.hasTaskContentChanged(this.lastFileContent, content)) {
 							// Update progress bar immediately
 							this.lastActiveFile = activeFile;
@@ -469,18 +469,18 @@ export default class TaskProgressBarPlugin extends Plugin {
 	}
 
 	/**
-	 * Kiểm tra xem nội dung thay đổi có liên quan đến task hay không
+	 * Check if content changes are related to tasks
 	 */
 	private hasTaskContentChanged(oldContent: string, newContent: string): boolean {
-		// Tách nội dung thành các dòng
+		// Split content into lines
 		const oldLines = oldContent.split('\n');
 		const newLines = newContent.split('\n');
 
-		// Tìm các dòng có task trong cả hai nội dung
+		// Find task lines in both contents
 		const oldTasks = oldLines.filter(line => line.trim().match(/^[-*] \[[x ]\]/i));
 		const newTasks = newLines.filter(line => line.trim().match(/^[-*] \[[x ]\]/i));
 
-		// So sánh số lượng task
+		// Compare task count
 		if (oldTasks.length !== newTasks.length) {
 			if (this.settings.showDebugInfo) {
 				console.log('Task count changed:', oldTasks.length, '->', newTasks.length);
@@ -488,7 +488,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 			return true;
 		}
 
-		// So sánh từng task
+		// Compare each task
 		for (let i = 0; i < oldTasks.length; i++) {
 			if (oldTasks[i] !== newTasks[i]) {
 				if (this.settings.showDebugInfo) {
@@ -760,7 +760,7 @@ class TaskProgressBarView extends ItemView {
 	}
 
 	/**
-	 * Update progress bar UI elements
+	 * Update UI elements first for better responsiveness, then process status and Kanban updates asynchronously
 	 */
 	private updateProgressBarUI(
 		container: HTMLElement,
@@ -1226,7 +1226,7 @@ class TaskProgressBarView extends ItemView {
 
 		let updatedBoardCount = 0;
 
-		// Nếu có target board được chọn trong settings, chỉ xử lý board đó
+		// If there is a target board selected in settings, only process that board
 		if (this.plugin.settings.autoAddKanbanBoard) {
 			const targetBoard = this.plugin.app.vault.getAbstractFileByPath(
 				this.plugin.settings.autoAddKanbanBoard
@@ -1289,7 +1289,7 @@ class TaskProgressBarView extends ItemView {
 			}
 		}
 
-		// Nếu không có target board, tìm tất cả các board có thể
+		// If no target board is set, search all possible boards
 		if (this.plugin.settings.showDebugInfo) {
 			console.log(
 				`No target board set, searching all potential Kanban boards...`

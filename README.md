@@ -1,115 +1,86 @@
-# Progress Tracker
+# Progress Tracker Plugin for Obsidian
 
-Progress Tracker is an Obsidian plugin that visualizes your task completion progress and helps you stay on top of your work.
+A plugin for Obsidian that helps you track progress of your tasks in real-time. It provides a visual progress bar and integrates with Kanban boards to help you manage your tasks more effectively.
 
 ## Features
 
-- **Smooth Progress Bar**: Visualizes your task completion progress with an animated, color-coded progress bar
-- **Task Tracking**: Automatically counts completed and incomplete tasks in your notes
-- **Status Management**: Automatically updates status in the YAML frontmatter based on task progress
-- **Kanban Integration**: Moves cards between columns in Kanban boards when tasks are completed
-- **Metadata Updates**: Automatically adds completion dates and updates metadata when tasks reach 100%
-- **Auto-Add to Kanban**: Automatically adds files with tasks to a specified Kanban board
-
-## Screenshots
-
-![Progress Tracker Main View](Screenshot.jpg)
-
-## How It Works
-
-The plugin tracks Markdown tasks (`- [ ]` and `- [x]`) in your notes and displays:
-
-- A visual progress bar showing completion percentage
-- Task count (complete/total)
-- Color-coded indicators for different progress levels
+- Real-time progress tracking of tasks in your notes
+- Visual progress bar showing completion percentage
+- Automatic status updates based on task completion
+- Kanban board integration for task management
+- Customizable colors and thresholds
+- Debug mode for troubleshooting
 
 ## Installation
 
-1. In Obsidian, go to Settings → Community plugins
-2. Disable Safe mode
-3. Click "Browse" and search for "Progress Tracker"
-4. Install the plugin and enable it
+1. Open Obsidian Settings
+2. Go to Community Plugins and disable Safe Mode
+3. Click Browse and search for "Progress Tracker"
+4. Install the plugin
+5. Enable the plugin in your Community Plugins list
 
-## Requirements
+## Usage
 
-- [Dataview plugin](https://github.com/blacksmithgu/obsidian-dataview) (optional but recommended)
+### Basic Usage
 
-## Configuration
+1. Create tasks in your notes using Markdown checkboxes:
+   ```markdown
+   - [ ] Task 1
+   - [x] Completed task
+   - [ ] Task 3
+   ```
 
-### General Settings
-- Toggle debug information
-- Customize update animations
-
-### Performance
-- Adjust the delay for various operations to balance responsiveness and performance
-- Configure keyboard input and checkbox click update delays
-
-### Progress Bar Colors
-- Choose from preset color schemes or create your own
-- Customize thresholds for low/medium/high progress states
-
-### Metadata Auto-Update
-- Automatically update YAML frontmatter when tasks are completed
-- Change status fields and add completion dates
-- Customize status labels
+2. The progress bar will automatically update as you check/uncheck tasks.
 
 ### Kanban Integration
-- Automatically move cards in Kanban boards based on task status
-- Match column names to status values
-- Automatically detect Kanban boards in your vault
-- Auto-add files with tasks to a specified Kanban board
-- Choose which column new files should be added to
 
-## Usage Tips
+The plugin can automatically move cards in your Kanban boards based on task completion:
 
-### Task Format
-The plugin recognizes standard Markdown task formats:
+1. Set up a Kanban board in Obsidian
+2. Configure the target Kanban board in plugin settings
+3. As you complete tasks, cards will move to appropriate columns
 
-- [] Incomplete task
-- [x] Completed task
+### Settings
 
+#### Progress Bar Colors
+- Choose between default theme colors or custom color schemes
+- Set custom colors for different progress levels
+- Configure progress thresholds
 
-### YAML Frontmatter
-For status tracking, use YAML frontmatter at the top of your notes:
-```yaml
----
-status: In Progress
----
-```
+#### Performance
+- Adjust update delays for different actions
+- Configure animation settings
+- Set maximum height for the progress bar container
 
-The plugin will automatically update this to "Completed" when all tasks are done.
+#### Metadata Auto-Update
+- Automatically update file metadata on task completion
+- Configure status labels for different progress states
+- Set up finished date tracking
 
-Kanban Integration
-For the best Kanban integration:
-
-- Name your columns to match your status labels (Todo, In Progress, Completed)
-- Enable automatic synchronization in settings
-
-### Keyboard Shortcuts
-You can assign keyboard shortcuts to the following commands:
-
-- Clear completed files cache - Reset the list of files that have already triggered completion notifications
+#### Kanban Integration
+- Enable/disable automatic Kanban board updates
+- Configure target Kanban board
+- Set up column mapping for task states
 
 ## Troubleshooting
-- Progress bar not updating: Check that your tasks use the proper Markdown format
-- Kanban integration not working: Ensure your Kanban columns match your status values
-- Slow updates: Adjust the performance settings to balance responsiveness with performance
+
+If you encounter issues:
+
+1. Enable Debug Mode in settings to see detailed logs
+2. Check if Dataview plugin is installed and enabled
+3. Verify your Kanban board configuration
+4. Clear the completed files cache if needed
 
 ## Support
-If you encounter issues or have feature suggestions:
 
-- Check the GitHub Issues
+If you find this plugin helpful, you can:
 
-## Changelog
-v1.1.0
-- Added smooth transitions for progress bar updates
-- Fixed Kanban board detection and integration
-- Improved metadata handling for completion status
-- Enhanced UI responsiveness
+- Star the repository
+- Report issues on GitHub
+- Submit feature requests
+- Contribute to the code
 
-v1.0.0
-- Initial release
-- Credits
-- Developed by Van Nam
-- Thanks to the Obsidian community for inspiration and feedback
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
