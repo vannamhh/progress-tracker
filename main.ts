@@ -11,10 +11,42 @@ import {
 	MarkdownPostProcessorContext,
 	debounce,
 	Notice,
-	SuggestModal, // Add this import
+	SuggestModal,
 } from "obsidian";
 
-// Define DataviewAPI interface
+/**
+ * Debug logger utility that only logs when debug mode is enabled
+ * Prevents console spam in production builds
+ */
+class DebugLogger {
+	private isDebugEnabled: () => boolean;
+
+	constructor(isDebugEnabled: () => boolean) {
+		this.isDebugEnabled = isDebugEnabled;
+	}
+
+	log(message: string, ...args: any[]): void {
+		if (this.isDebugEnabled()) {
+			console.log(`[Progress Tracker] ${message}`, ...args);
+		}
+	}
+
+	error(message: string, error?: Error): void {
+		if (this.isDebugEnabled()) {
+			console.error(`[Progress Tracker ERROR] ${message}`, error);
+		}
+	}
+
+	warn(message: string, ...args: any[]): void {
+		if (this.isDebugEnabled()) {
+			console.warn(`[Progress Tracker WARNING] ${message}`, ...args);
+		}
+	}
+}
+
+/**
+ * Type-safe interface for Dataview API
+ */
 interface DataviewApi {
 	executeJs(
 		code: string,
@@ -23,40 +55,62 @@ interface DataviewApi {
 	): Promise<any>;
 	page(path: string): any;
 	pages(source: string): any[];
-	// Not using eval as it might not exist in some Dataview versions
 }
 
-// Define window object interface to access Dataview plugin
+/**
+ * Type-safe interface for accessing plugins
+ */
+interface ObsidianApp extends App {
+	plugins?: {
+		plugins?: {
+			dataview?: {
+				api?: DataviewApi;
+			};
+		};
+		enabledPlugins?: Set<string>;
+	};
+}
+
+/**
+ * Extended window interface for Dataview API access
+ */
 declare global {
 	interface Window {
 		DataviewAPI?: DataviewApi;
 	}
 }
 
-// Helper function to get Dataview API
+/**
+ * Safely get Dataview API with proper type checking
+ * @param app - Obsidian app instance
+ * @returns DataviewApi instance or null if not available
+ */
 function getDataviewAPI(app: App): DataviewApi | null {
-	// Method 1: Through window object
-	// @ts-ignore
-	if (window.DataviewAPI) {
-		return window.DataviewAPI;
-	}
+	try {
+		// Method 1: Through window object (most reliable)
+		if (typeof window !== 'undefined' && window.DataviewAPI) {
+			return window.DataviewAPI;
+		}
 
-	// Method 2: Through app.plugins
-	// @ts-ignore
-	const dataviewPlugin = app.plugins?.plugins?.dataview;
-	if (dataviewPlugin && dataviewPlugin.api) {
-		return dataviewPlugin.api;
-	}
+		// Method 2: Through app.plugins with type safety
+		const obsidianApp = app as ObsidianApp;
+		const dataviewPlugin = obsidianApp.plugins?.plugins?.dataview;
+		if (dataviewPlugin?.api) {
+			return dataviewPlugin.api;
+		}
 
-	// Method 3: Check if plugin is enabled
-	// @ts-ignore
-	if (app.plugins.enabledPlugins.has("dataview")) {
-		console.log("Dataview plugin is enabled but API is not available yet");
+		// Method 3: Check if plugin is enabled
+		const enabledPlugins = obsidianApp.plugins?.enabledPlugins;
+		if (enabledPlugins?.has("dataview")) {
+			// Plugin is enabled but API not ready yet
+			return null;
+		}
+
+		return null;
+	} catch (error) {
+		console.error("Error accessing Dataview API:", error);
 		return null;
 	}
-
-	console.log("Dataview plugin is not enabled");
-	return null;
 }
 
 // Define custom checkbox mapping interface
@@ -157,6 +211,8 @@ export default class TaskProgressBarPlugin extends Plugin {
 	private lastActiveFile: TFile | null = null;
 	private lastFileContent: string = "";
 	private dataviewCheckInterval: number | null = null;
+	// Debug logger instance
+	private logger: DebugLogger;
 	// New tracking variables for Kanban-to-file sync
 	private lastKanbanContent: Map<string, string> = new Map();
 	private isUpdatingFromKanban: boolean = false;
@@ -173,6 +229,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		// Initialize debug logger
+		this.logger = new DebugLogger(() => this.settings.showDebugInfo);
 
 		// Apply the max-height CSS style as soon as the plugin loads
 		this.applyMaxTabsHeightStyle();
@@ -207,17 +266,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 						!this.autoSyncedFiles.has(file.path) &&
 						!this.isUpdatingFromKanban) {
 						
-						if (this.settings.showDebugInfo) {
-							console.log(`Auto-syncing Kanban board on open: ${file.path}`);
-						}
+						this.logger.log(`Auto-syncing Kanban board on open: ${file.path}`);
 						
 						// Add small delay to ensure file is fully loaded and no other operations are running
 						setTimeout(async () => {
 							// Triple-check that we're not in the middle of an update and no recent changes
 							if (!this.isUpdatingFromKanban && !this.lastKanbanContent.has(file.path)) {
 								await this.autoSyncKanbanCheckboxStates(file);
-							} else if (this.settings.showDebugInfo) {
-								console.log(`Skipping auto-sync - update in progress or file already tracked`);
+							} else {
+								this.logger.log(`Skipping auto-sync - update in progress or file already tracked`);
 							}
 						}, 800); // Increased delay to avoid conflicts with editor changes
 					}
@@ -243,15 +300,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 					this.settings.enableCustomCheckboxStates &&
 					this.isKanbanBoard(file)) {
 					
-					if (this.settings.showDebugInfo) {
-						console.log(`File modified event for Kanban board: ${file.path}`);
-					}
+					this.logger.log(`File modified event for Kanban board: ${file.path}`);
 					
 					// Skip if we're currently updating to avoid loops
 					if (this.isUpdatingFromKanban) {
-						if (this.settings.showDebugInfo) {
-							console.log('Skipping file modify - currently updating from plugin');
-						}
+						this.logger.log('Skipping file modify - currently updating from plugin');
 						return;
 					}
 					
@@ -278,9 +331,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 					if (view instanceof MarkdownView && this.sidebarView) {
 						// Skip if we're currently updating from Kanban to avoid loops
 						if (this.isUpdatingFromKanban) {
-							if (this.settings.showDebugInfo) {
-								console.log('Skipping editor-change - currently updating from Kanban');
-							}
+							this.logger.log('Skipping editor-change - currently updating from Kanban');
 							return;
 						}
 
@@ -293,22 +344,16 @@ export default class TaskProgressBarPlugin extends Plugin {
 							this.settings.enableCustomCheckboxStates &&
 							currentFile && 
 							this.isKanbanBoard(currentFile)) {
-							if (this.settings.showDebugInfo) {
-								console.log(`Detected Kanban board change: ${currentFile.path}`);
-								console.log(`Content length: ${content.length}, lastFileContent length: ${this.lastFileContent.length}`);
-								console.log(`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`);
-							}
+							this.logger.log(`Detected Kanban board change: ${currentFile.path}`);
+							this.logger.log(`Content length: ${content.length}, lastFileContent length: ${this.lastFileContent.length}`);
+							this.logger.log(`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`);
 							
 							// NEW: Enhanced immediate Kanban normalization protection (runs for ALL Kanban changes)
 							if (this.settings.enableKanbanNormalizationProtection) {
 								const hasImmediateNormalization = this.detectImmediateKanbanNormalization(this.lastFileContent, content);
-								if (this.settings.showDebugInfo) {
-									console.log(`Immediate normalization check: ${hasImmediateNormalization}`);
-								}
+								this.logger.log(`Immediate normalization check: ${hasImmediateNormalization}`);
 								if (hasImmediateNormalization) {
-									if (this.settings.showDebugInfo) {
-										console.log('Detected immediate Kanban normalization - reverting unwanted changes');
-									}
+									this.logger.log('Detected immediate Kanban normalization - reverting unwanted changes');
 									// Revert the normalization immediately
 									const revertedContent = this.revertKanbanNormalization(this.lastFileContent, content, currentFile);
 									if (revertedContent !== content) {
@@ -333,21 +378,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 									}
 								} else {
 									// DEBUG: If no immediate normalization detected, let's see what changed
-									if (this.settings.showDebugInfo) {
-										const oldLines = this.lastFileContent.split('\n');
-										const newLines = content.split('\n');
-										let changeCount = 0;
-										for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
-											const oldMatch = oldLines[i].match(/^(\s*- )\[([^\]]*)\]/);
-											const newMatch = newLines[i].match(/^(\s*- )\[([^\]]*)\]/);
-											if (oldMatch && newMatch && oldMatch[2] !== newMatch[2]) {
-												changeCount++;
-												console.log(`DEBUG: Line ${i} checkbox change: [${oldMatch[2]}] → [${newMatch[2]}]`);
-											}
+									const oldLines = this.lastFileContent.split('\n');
+									const newLines = content.split('\n');
+									let changeCount = 0;
+									for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
+										const oldMatch = oldLines[i].match(/^(\s*- )\[([^\]]*)\]/);
+										const newMatch = newLines[i].match(/^(\s*- )\[([^\]]*)\]/);
+										if (oldMatch && newMatch && oldMatch[2] !== newMatch[2]) {
+											changeCount++;
+											this.logger.log(`Line ${i} checkbox change: [${oldMatch[2]}] → [${newMatch[2]}]`);
 										}
-										if (changeCount > 0) {
-											console.log(`DEBUG: Found ${changeCount} checkbox changes but no immediate normalization detected`);
-										}
+									}
+									if (changeCount > 0) {
+										this.logger.log(`Found ${changeCount} checkbox changes but no immediate normalization detected`);
 									}
 								}
 							}
@@ -384,8 +427,8 @@ export default class TaskProgressBarPlugin extends Plugin {
 									// Then update last file content
 									this.lastFileContent = content;
 								}
-							} else if (this.settings.showDebugInfo) {
-								console.log('Skipping update - no task changes detected');
+							} else {
+								this.logger.log('Skipping update - no task changes detected');
 							}
 						}
 					}
@@ -478,12 +521,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 			setTimeout(async () => {
 				const currentFile = this.app.workspace.getActiveFile();
 				if (currentFile && this.sidebarView) {
-					if (this.settings.showDebugInfo) {
-						console.log(
-							"Initial file load after plugin start:",
-							currentFile.path
-						);
-					}
+					this.logger.log("Initial file load after plugin start:", currentFile.path);
 
 					await this.updateLastFileContent(currentFile);
 					// Use a flag to indicate this is the initial load
@@ -521,27 +559,29 @@ export default class TaskProgressBarPlugin extends Plugin {
 					return;
 				}
 
-				console.log("=== Kanban Sync Debug Info ===");
-				console.log(`Current file: ${currentFile.path}`);
-				console.log(`enableKanbanToFileSync: ${this.settings.enableKanbanToFileSync}`);
-				console.log(`enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`);
-				console.log(`enableKanbanAutoSync: ${this.settings.enableKanbanAutoSync}`);
-				console.log(`enableKanbanNormalizationProtection: ${this.settings.enableKanbanNormalizationProtection}`);
-				console.log(`isKanbanBoard: ${this.isKanbanBoard(currentFile)}`);
-				console.log(`Checkbox mappings:`, this.settings.kanbanColumnCheckboxMappings);
-				console.log(`Last Kanban content stored: ${this.lastKanbanContent.has(currentFile.path)}`);
-				console.log(`Auto-synced files: ${Array.from(this.autoSyncedFiles)}`);
-				console.log(`Current file auto-synced: ${this.autoSyncedFiles.has(currentFile.path)}`);
-				console.log(`isUpdatingFromKanban flag: ${this.isUpdatingFromKanban}`);
-				console.log(`lastFileContent length: ${this.lastFileContent.length}`);
-				console.log(`Last file update timestamp: ${this.lastFileUpdateMap.get(currentFile.path)}`);
-				
+				const debugData: Record<string, any> = {
+					"Current file": currentFile.path,
+					"enableKanbanToFileSync": this.settings.enableKanbanToFileSync,
+					"enableCustomCheckboxStates": this.settings.enableCustomCheckboxStates,
+					"enableKanbanAutoSync": this.settings.enableKanbanAutoSync,
+					"enableKanbanNormalizationProtection": this.settings.enableKanbanNormalizationProtection,
+					"isKanbanBoard": this.isKanbanBoard(currentFile),
+					"Checkbox mappings": this.settings.kanbanColumnCheckboxMappings,
+					"Last Kanban content stored": this.lastKanbanContent.has(currentFile.path),
+					"Auto-synced files": Array.from(this.autoSyncedFiles),
+					"Current file auto-synced": this.autoSyncedFiles.has(currentFile.path),
+					"isUpdatingFromKanban flag": this.isUpdatingFromKanban,
+					"lastFileContent length": this.lastFileContent.length,
+					"Last file update timestamp": this.lastFileUpdateMap.get(currentFile.path)
+				};
+
 				// Show current file content preview
 				if (this.lastKanbanContent.has(currentFile.path)) {
 					const storedContent = this.lastKanbanContent.get(currentFile.path)!;
-					console.log(`Stored content preview (first 200 chars): ${storedContent.substring(0, 200)}...`);
+					debugData["Stored content preview"] = `${storedContent.substring(0, 200)}...`;
 				}
-				
+
+				this.debugOutput("Kanban Sync Debug Info", debugData);
 				new Notice("Debug info logged to console. Check Developer Tools.");
 			},
 		});
@@ -554,9 +594,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 				this.autoSyncedFiles.clear();
 				new Notice("Auto-sync cache cleared. Kanban boards will be auto-synced again when opened.");
 				
-				if (this.settings.showDebugInfo) {
-					console.log("Auto-sync cache cleared");
-				}
+				this.logger.log("Auto-sync cache cleared");
 			},
 		});
 
@@ -1059,7 +1097,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 		});
 	}
 
-	// Check Dataview API and set up interval to check again if not found
+	/**
+	 * Check for Dataview API availability and set up retry interval if not found
+	 * This ensures the plugin can integrate with Dataview when it becomes available
+	 */
 	checkDataviewAPI() {
 		// Check immediately
 		this.dvAPI = getDataviewAPI(this.app);
@@ -1084,7 +1125,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 		}
 	}
 
-	// Update last file content
+	/**
+	 * Update cached file content for comparison in future changes
+	 * @param file File to cache content for
+	 */
 	async updateLastFileContent(file: TFile) {
 		if (file) {
 			this.lastFileContent = await this.app.vault.read(file);
@@ -1124,20 +1168,45 @@ export default class TaskProgressBarPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Cleanup all resources when plugin is unloaded
+	 * Prevents memory leaks and ensures proper cleanup
+	 */
 	onunload() {
-		// Clear interval if it exists
-		if (this.dataviewCheckInterval) {
-			clearInterval(this.dataviewCheckInterval);
-			this.dataviewCheckInterval = null;
-		}
+		try {
+			// Clear interval if it exists
+			if (this.dataviewCheckInterval) {
+				clearInterval(this.dataviewCheckInterval);
+				this.dataviewCheckInterval = null;
+			}
 
-		// Clear any in-memory data
-		if (this.sidebarView) {
-			this.sidebarView.clearCompletedFilesCache();
-		}
+			// Clear any in-memory data
+			if (this.sidebarView) {
+				this.sidebarView.clearCompletedFilesCache();
+			}
 
-		// NEW: Clear normalization detector state
-		this.kanbanNormalizationDetector.clear();
+			// Clear all Maps and Sets to prevent memory leaks
+			this.lastKanbanContent.clear();
+			this.autoSyncedFiles.clear();
+			this.lastFileUpdateMap.clear();
+			this.kanbanNormalizationDetector.clear();
+			this.fileOperationLimiter.clear();
+
+			// Reset flags
+			this.isUpdatingFromKanban = false;
+			this.lastActiveFile = null;
+			this.lastFileContent = "";
+
+			// Remove custom CSS styles
+			const existingStyle = document.getElementById("progress-tracker-max-tabs-height");
+			if (existingStyle) {
+				existingStyle.remove();
+			}
+
+			this.logger.log("Plugin cleanup completed successfully");
+		} catch (error) {
+			console.error("Error during plugin cleanup:", error);
+		}
 	}
 
 	async loadSettings() {
@@ -1159,7 +1228,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 		}
 	}
 
-	// Improved method to apply the max-height style
+	/**
+	 * Safely apply max-height CSS style with input validation
+	 * Prevents XSS by validating CSS values before DOM insertion
+	 */
 	applyMaxTabsHeightStyle() {
 		try {
 			// Remove any existing style element first
@@ -1170,34 +1242,192 @@ export default class TaskProgressBarPlugin extends Plugin {
 				existingStyle.remove();
 			}
 
+			// Validate CSS value to prevent XSS
+			const maxHeight = this.settings.maxTabsHeight;
+			if (!this.isValidCSSValue(maxHeight)) {
+				this.logger.error(`Invalid CSS value for maxTabsHeight: ${maxHeight}`);
+				return;
+			}
+
 			// Create a new style element
 			const style = document.createElement("style");
 			style.id = "progress-tracker-max-tabs-height";
 
 			// Target only workspace-tabs containing our plugin view
 			if (!this.settings.showDebugInfo) {
+				// Use textContent instead of innerHTML for safety
 				style.textContent = `
 					.workspace-tabs.mod-top:has(.progress-tracker-leaf) {
-						max-height: ${this.settings.maxTabsHeight} !important;
+						max-height: ${maxHeight} !important;
 					}
 				`;
 				// Add the style to the document head
 				document.head.appendChild(style);
 			}
-			// Debug info
-			if (this.settings.showDebugInfo) {
-				console.log(
-					`Applied max-tabs-height: ${this.settings.maxTabsHeight} to Progress Tracker view`
-				);
-			}
+			
+			this.logger.log(`Applied max-tabs-height: ${maxHeight} to Progress Tracker view`);
 		} catch (error) {
-			console.error("Error applying max tabs height style:", error);
+			this.logger.error("Error applying max tabs height style", error);
+		}
+	}
+
+	/**
+	 * Validate CSS value to prevent XSS injection
+	 * @param value CSS value to validate
+	 * @returns true if value is safe to use
+	 */
+	private isValidCSSValue(value: string): boolean {
+		if (!value || typeof value !== 'string') return false;
+		
+		// Allow specific safe values
+		if (value === 'auto' || value === 'none') return true;
+		
+		// Allow valid CSS length values (px, em, rem, vh, %)
+		const validCSSPattern = /^(\d+(\.\d+)?)(px|em|rem|vh|%)$/;
+		return validCSSPattern.test(value.trim());
+	}
+
+	/**
+	 * Safe debug output for commands - only shows when debug is enabled
+	 * @param title Debug section title
+	 * @param data Debug data to display
+	 */
+	private debugOutput(title: string, data: Record<string, any>): void {
+		if (!this.settings.showDebugInfo) return;
+		
+		this.logger.log(`=== ${title} ===`);
+		Object.entries(data).forEach(([key, value]) => {
+			this.logger.log(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+		});
+	}
+
+	/**
+	 * Validate file before performing operations
+	 * @param file File to validate
+	 * @returns true if file is safe to operate on
+	 */
+	private isValidFile(file: TFile): boolean {
+		if (!file) return false;
+		
+		// Check if file path is safe (no path traversal)
+		if (file.path.includes('..') || file.path.includes('//')) {
+			this.logger.error(`Unsafe file path detected: ${file.path}`);
+			return false;
+		}
+		
+		// Check if file is markdown
+		if (!file.path.endsWith('.md')) {
+			this.logger.warn(`Non-markdown file: ${file.path}`);
+			return false;
+		}
+		
+		// Check file size (prevent processing extremely large files)
+		if (file.stat.size > 10 * 1024 * 1024) { // 10MB limit
+			this.logger.error(`File too large: ${file.path} (${file.stat.size} bytes)`);
+			return false;
+		}
+		
+		return true;
+	}
+
+	/**
+	 * Validate content before processing
+	 * @param content Content to validate
+	 * @returns true if content is safe to process
+	 */
+	private isValidContent(content: string): boolean {
+		if (typeof content !== 'string') return false;
+		
+		// Check content size
+		if (content.length > 5 * 1024 * 1024) { // 5MB limit
+			this.logger.error(`Content too large: ${content.length} characters`);
+			return false;
+		}
+		
+		// Check for suspicious patterns that might indicate injection
+		const suspiciousPatterns = [
+			/<script[^>]*>/i,
+			/javascript:/i,
+			/data:text\/html/i,
+			/vbscript:/i
+		];
+		
+		for (const pattern of suspiciousPatterns) {
+			if (pattern.test(content)) {
+				this.logger.error(`Suspicious content pattern detected`);
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
+	/**
+	 * Rate limiter for file operations
+	 */
+	private fileOperationLimiter = new Map<string, number>();
+	private readonly FILE_OPERATION_DELAY = 100; // Minimum ms between operations per file
+
+	/**
+	 * Check if file operation is rate limited
+	 * @param filePath Path of file to check
+	 * @returns true if operation should be allowed
+	 */
+	private checkRateLimit(filePath: string): boolean {
+		const now = Date.now();
+		const lastOperation = this.fileOperationLimiter.get(filePath);
+		
+		if (lastOperation && (now - lastOperation) < this.FILE_OPERATION_DELAY) {
+			this.logger.warn(`Rate limited file operation: ${filePath}`);
+			return false;
+		}
+		
+		this.fileOperationLimiter.set(filePath, now);
+		return true;
+	}
+
+	/**
+	 * Standardized error handler for plugin operations
+	 * @param error Error object or message
+	 * @param context Context where error occurred
+	 * @param showNotice Whether to show user notification
+	 */
+	private handleError(error: Error | string, context: string, showNotice: boolean = false): void {
+		const errorMessage = error instanceof Error ? error.message : error;
+		const fullMessage = `${context}: ${errorMessage}`;
+		
+		this.logger.error(fullMessage, error instanceof Error ? error : undefined);
+		
+		if (showNotice) {
+			new Notice(`Progress Tracker Error: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Safe async operation wrapper with error handling
+	 * @param operation Async operation to execute
+	 * @param context Context description for error handling
+	 * @param fallbackValue Value to return on error
+	 */
+	private async safeAsyncOperation<T>(
+		operation: () => Promise<T>,
+		context: string,
+		fallbackValue: T
+	): Promise<T> {
+		try {
+			return await operation();
+		} catch (error) {
+			this.handleError(error as Error, context, false);
+			return fallbackValue;
 		}
 	}
 
 	/**
 	 * Check if content changes are related to tasks
-	 * Updated to support custom checkbox states like [/], [-], [~], etc.
+	 * Supports custom checkbox states like [/], [-], [~], etc.
+	 * @param oldContent Previous file content
+	 * @param newContent Current file content
+	 * @returns true if task-related changes detected
 	 */
 	private hasTaskContentChanged(oldContent: string, newContent: string): boolean {
 		// Split content into lines
@@ -1233,7 +1463,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 	}
 
 	/**
-	 * Check if a file is a Kanban board (public wrapper for sidebar view method)
+	 * Check if a file is a Kanban board
+	 * Uses heuristics to detect Kanban structure and plugin metadata
+	 * @param file File to check
+	 * @returns true if file appears to be a Kanban board
 	 */
 	public isKanbanBoard(file: TFile): boolean {
 		if (!this.sidebarView) return false;
@@ -1245,10 +1478,24 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 */
 	async handleKanbanBoardChange(kanbanFile: TFile, newContent: string): Promise<void> {
 		try {
-			if (this.settings.showDebugInfo) {
-				console.log(`handleKanbanBoardChange called for: ${kanbanFile.path}`);
-				console.log(`Settings - enableKanbanToFileSync: ${this.settings.enableKanbanToFileSync}, enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`);
+			// Validate inputs
+			if (!this.isValidFile(kanbanFile)) {
+				this.logger.error(`Invalid file for Kanban board change: ${kanbanFile?.path}`);
+				return;
 			}
+
+			if (!this.isValidContent(newContent)) {
+				this.logger.error(`Invalid content for Kanban board change`);
+				return;
+			}
+
+			// Check rate limit
+			if (!this.checkRateLimit(kanbanFile.path)) {
+				return;
+			}
+
+			this.logger.log(`handleKanbanBoardChange called for: ${kanbanFile.path}`);
+			this.logger.log(`Settings - enableKanbanToFileSync: ${this.settings.enableKanbanToFileSync}, enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`);
 
 			if (!this.settings.enableKanbanToFileSync || !this.settings.enableCustomCheckboxStates) {
 				if (this.settings.showDebugInfo) {
@@ -1370,10 +1617,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 			}
 
 		} catch (error) {
-			console.error("Error handling Kanban board change:", error);
-			if (this.settings.showDebugInfo) {
-				console.error("Error details:", error);
-			}
+			this.handleError(error as Error, "handleKanbanBoardChange", false);
 		}
 	}
 
@@ -1473,7 +1717,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			return movements;
 		} catch (error) {
-			console.error("Error detecting card movements:", error);
+			this.handleError(error as Error, "detectActualCardMovements", false);
 			return [];
 		}
 	}
@@ -1600,10 +1844,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 			return lines.join('\n');
 
 		} catch (error) {
-			console.error("Error updating card checkbox states in Kanban:", error);
-			if (this.settings.showDebugInfo) {
-				console.error("Error details:", error);
-			}
+			this.handleError(error as Error, "updateCardCheckboxStatesInKanban", false);
 			return newContent; // Return original content if there's an error
 		}
 	}
