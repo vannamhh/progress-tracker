@@ -88,7 +88,7 @@ declare global {
 function getDataviewAPI(app: App): DataviewApi | null {
 	try {
 		// Method 1: Through window object (most reliable)
-		if (typeof window !== 'undefined' && window.DataviewAPI) {
+		if (typeof window !== "undefined" && window.DataviewAPI) {
 			return window.DataviewAPI;
 		}
 
@@ -221,11 +221,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 	// Track last update time for each file to detect timing conflicts
 	private lastFileUpdateMap: Map<string, number> = new Map();
 	// NEW: Smart Kanban interaction detection
-	private kanbanNormalizationDetector: Map<string, {
-		preChangeCheckpoints: Map<number, string>;
-		lastKanbanUIInteraction: number;
-		pendingNormalizationCheck: number | null;
-	}> = new Map();
+	private kanbanNormalizationDetector: Map<
+		string,
+		{
+			preChangeCheckpoints: Map<number, string>;
+			lastKanbanUIInteraction: number;
+			pendingNormalizationCheck: number | null;
+		}
+	> = new Map();
 
 	async onload() {
 		await this.loadSettings();
@@ -260,21 +263,29 @@ export default class TaskProgressBarPlugin extends Plugin {
 					this.lastActiveFile = file;
 
 					// Handle auto-sync for Kanban boards (run once per file per session)
-					if (this.settings.enableKanbanAutoSync && 
+					if (
+						this.settings.enableKanbanAutoSync &&
 						this.settings.enableCustomCheckboxStates &&
 						this.isKanbanBoard(file) &&
 						!this.autoSyncedFiles.has(file.path) &&
-						!this.isUpdatingFromKanban) {
-						
-						this.logger.log(`Auto-syncing Kanban board on open: ${file.path}`);
-						
+						!this.isUpdatingFromKanban
+					) {
+						this.logger.log(
+							`Auto-syncing Kanban board on open: ${file.path}`
+						);
+
 						// Add small delay to ensure file is fully loaded and no other operations are running
 						setTimeout(async () => {
 							// Triple-check that we're not in the middle of an update and no recent changes
-							if (!this.isUpdatingFromKanban && !this.lastKanbanContent.has(file.path)) {
+							if (
+								!this.isUpdatingFromKanban &&
+								!this.lastKanbanContent.has(file.path)
+							) {
 								await this.autoSyncKanbanCheckboxStates(file);
 							} else {
-								this.logger.log(`Skipping auto-sync - update in progress or file already tracked`);
+								this.logger.log(
+									`Skipping auto-sync - update in progress or file already tracked`
+								);
 							}
 						}, 800); // Increased delay to avoid conflicts with editor changes
 					}
@@ -295,27 +306,38 @@ export default class TaskProgressBarPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("modify", async (file) => {
 				// Only handle TFile instances that are Kanban boards
-				if (file instanceof TFile &&
-					this.settings.enableKanbanToFileSync && 
+				if (
+					file instanceof TFile &&
+					this.settings.enableKanbanToFileSync &&
 					this.settings.enableCustomCheckboxStates &&
-					this.isKanbanBoard(file)) {
-					
-					this.logger.log(`File modified event for Kanban board: ${file.path}`);
-					
+					this.isKanbanBoard(file)
+				) {
+					this.logger.log(
+						`File modified event for Kanban board: ${file.path}`
+					);
+
 					// Skip if we're currently updating to avoid loops
 					if (this.isUpdatingFromKanban) {
-						this.logger.log('Skipping file modify - currently updating from plugin');
+						this.logger.log(
+							"Skipping file modify - currently updating from plugin"
+						);
 						return;
 					}
-					
+
 					// Add small delay to ensure content is properly updated
 					setTimeout(async () => {
 						try {
 							const newContent = await this.app.vault.read(file);
-							await this.handleKanbanBoardChange(file, newContent);
+							await this.handleKanbanBoardChange(
+								file,
+								newContent
+							);
 						} catch (error) {
 							if (this.settings.showDebugInfo) {
-								console.error("Error handling file modify for Kanban board:", error);
+								console.error(
+									"Error handling file modify for Kanban board:",
+									error
+								);
 							}
 						}
 					}, 100);
@@ -331,7 +353,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 					if (view instanceof MarkdownView && this.sidebarView) {
 						// Skip if we're currently updating from Kanban to avoid loops
 						if (this.isUpdatingFromKanban) {
-							this.logger.log('Skipping editor-change - currently updating from Kanban');
+							this.logger.log(
+								"Skipping editor-change - currently updating from Kanban"
+							);
 							return;
 						}
 
@@ -340,66 +364,129 @@ export default class TaskProgressBarPlugin extends Plugin {
 						const currentFile = view.file;
 
 						// Check if this is a Kanban board file and handle card checkbox sync (independent feature)
-						if (this.settings.enableKanbanToFileSync && 
+						if (
+							this.settings.enableKanbanToFileSync &&
 							this.settings.enableCustomCheckboxStates &&
-							currentFile && 
-							this.isKanbanBoard(currentFile)) {
-							this.logger.log(`Detected Kanban board change: ${currentFile.path}`);
-							this.logger.log(`Content length: ${content.length}, lastFileContent length: ${this.lastFileContent.length}`);
-							this.logger.log(`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`);
-							
+							currentFile &&
+							this.isKanbanBoard(currentFile)
+						) {
+							this.logger.log(
+								`Detected Kanban board change: ${currentFile.path}`
+							);
+							this.logger.log(
+								`Content length: ${content.length}, lastFileContent length: ${this.lastFileContent.length}`
+							);
+							this.logger.log(
+								`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`
+							);
+
 							// NEW: Enhanced immediate Kanban normalization protection (runs for ALL Kanban changes)
-							if (this.settings.enableKanbanNormalizationProtection) {
-								const hasImmediateNormalization = this.detectImmediateKanbanNormalization(this.lastFileContent, content);
-								this.logger.log(`Immediate normalization check: ${hasImmediateNormalization}`);
+							if (
+								this.settings
+									.enableKanbanNormalizationProtection
+							) {
+								const hasImmediateNormalization =
+									this.detectImmediateKanbanNormalization(
+										this.lastFileContent,
+										content
+									);
+								this.logger.log(
+									`Immediate normalization check: ${hasImmediateNormalization}`
+								);
 								if (hasImmediateNormalization) {
-									this.logger.log('Detected immediate Kanban normalization - reverting unwanted changes');
+									this.logger.log(
+										"Detected immediate Kanban normalization - reverting unwanted changes"
+									);
 									// Revert the normalization immediately
-									const revertedContent = this.revertKanbanNormalization(this.lastFileContent, content, currentFile);
+									const revertedContent =
+										this.revertKanbanNormalization(
+											this.lastFileContent,
+											content,
+											currentFile
+										);
 									if (revertedContent !== content) {
 										// Set flag to prevent loops
 										this.isUpdatingFromKanban = true;
 										// Apply the reverted content and then sync all checkbox states
 										setTimeout(async () => {
 											// Apply sync to ensure all checkbox states match column mappings
-											const syncedContent = await this.syncAllCheckboxStatesToMappings(currentFile, revertedContent);
-											await this.app.vault.modify(currentFile, syncedContent);
-											this.lastFileContent = syncedContent;
-											
+											const syncedContent =
+												await this.syncAllCheckboxStatesToMappings(
+													currentFile,
+													revertedContent
+												);
+											await this.app.vault.modify(
+												currentFile,
+												syncedContent
+											);
+											this.lastFileContent =
+												syncedContent;
+
 											// Try to force refresh Kanban UI
-											await this.forceRefreshKanbanUI(currentFile);
-											
+											await this.forceRefreshKanbanUI(
+												currentFile
+											);
+
 											// Reset flag
 											setTimeout(() => {
-												this.isUpdatingFromKanban = false;
+												this.isUpdatingFromKanban =
+													false;
 											}, 100);
 										}, 50);
 										return; // Skip further processing
 									}
 								} else {
 									// DEBUG: If no immediate normalization detected, let's see what changed
-									const oldLines = this.lastFileContent.split('\n');
-									const newLines = content.split('\n');
+									const oldLines =
+										this.lastFileContent.split("\n");
+									const newLines = content.split("\n");
 									let changeCount = 0;
-									for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
-										const oldMatch = oldLines[i].match(/^(\s*- )\[([^\]]*)\]/);
-										const newMatch = newLines[i].match(/^(\s*- )\[([^\]]*)\]/);
-										if (oldMatch && newMatch && oldMatch[2] !== newMatch[2]) {
+									for (
+										let i = 0;
+										i <
+										Math.min(
+											oldLines.length,
+											newLines.length
+										);
+										i++
+									) {
+										const oldMatch =
+											oldLines[i].match(
+												/^(\s*- )\[([^\]]*)\]/
+											);
+										const newMatch =
+											newLines[i].match(
+												/^(\s*- )\[([^\]]*)\]/
+											);
+										if (
+											oldMatch &&
+											newMatch &&
+											oldMatch[2] !== newMatch[2]
+										) {
 											changeCount++;
-											this.logger.log(`Line ${i} checkbox change: [${oldMatch[2]}] → [${newMatch[2]}]`);
+											this.logger.log(
+												`Line ${i} checkbox change: [${oldMatch[2]}] → [${newMatch[2]}]`
+											);
 										}
 									}
 									if (changeCount > 0) {
-										this.logger.log(`Found ${changeCount} checkbox changes but no immediate normalization detected`);
+										this.logger.log(
+											`Found ${changeCount} checkbox changes but no immediate normalization detected`
+										);
 									}
 								}
 							}
-							
+
 							// Add small delay to ensure content is properly updated after drag/drop
 							setTimeout(async () => {
 								// Re-read the file content to ensure we have the latest version
-								const latestContent = await this.app.vault.read(currentFile);
-								await this.handleKanbanBoardChange(currentFile, latestContent);
+								const latestContent = await this.app.vault.read(
+									currentFile
+								);
+								await this.handleKanbanBoardChange(
+									currentFile,
+									latestContent
+								);
 							}, 200);
 							// Don't return here - allow normal processing to continue
 						}
@@ -413,7 +500,12 @@ export default class TaskProgressBarPlugin extends Plugin {
 							/- \[[^\]]*\]/.test(this.lastFileContent)
 						) {
 							// Check if tasks have changed
-							if (this.hasTaskContentChanged(this.lastFileContent, content)) {
+							if (
+								this.hasTaskContentChanged(
+									this.lastFileContent,
+									content
+								)
+							) {
 								if (this.lastActiveFile) {
 									// Update last file content before checking changes
 									this.lastActiveFile = view.file;
@@ -428,7 +520,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 									this.lastFileContent = content;
 								}
 							} else {
-								this.logger.log('Skipping update - no task changes detected');
+								this.logger.log(
+									"Skipping update - no task changes detected"
+								);
 							}
 						}
 					}
@@ -457,12 +551,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 					// Update immediately
 					setTimeout(() => {
 						const content = activeView.editor.getValue();
-						
+
 						// Check if content contains tasks and if they have changed (enhanced for custom states)
 						if (
 							(content.includes("- [") ||
-							/- \[[^\]]*\]/.test(content)) &&
-							this.hasTaskContentChanged(this.lastFileContent, content)
+								/- \[[^\]]*\]/.test(content)) &&
+							this.hasTaskContentChanged(
+								this.lastFileContent,
+								content
+							)
 						) {
 							this.lastActiveFile = activeView.file;
 
@@ -500,10 +597,18 @@ export default class TaskProgressBarPlugin extends Plugin {
 						const content = await this.app.vault.read(activeFile);
 
 						// Only update if tasks have changed
-						if (this.hasTaskContentChanged(this.lastFileContent, content)) {
+						if (
+							this.hasTaskContentChanged(
+								this.lastFileContent,
+								content
+							)
+						) {
 							// Update progress bar immediately
 							this.lastActiveFile = activeFile;
-							this.sidebarView.updateProgressBar(activeFile, content);
+							this.sidebarView.updateProgressBar(
+								activeFile,
+								content
+							);
 
 							// Then update last file content
 							this.lastFileContent = content;
@@ -521,7 +626,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 			setTimeout(async () => {
 				const currentFile = this.app.workspace.getActiveFile();
 				if (currentFile && this.sidebarView) {
-					this.logger.log("Initial file load after plugin start:", currentFile.path);
+					this.logger.log(
+						"Initial file load after plugin start:",
+						currentFile.path
+					);
 
 					await this.updateLastFileContent(currentFile);
 					// Use a flag to indicate this is the initial load
@@ -561,28 +669,44 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 				const debugData: Record<string, any> = {
 					"Current file": currentFile.path,
-					"enableKanbanToFileSync": this.settings.enableKanbanToFileSync,
-					"enableCustomCheckboxStates": this.settings.enableCustomCheckboxStates,
-					"enableKanbanAutoSync": this.settings.enableKanbanAutoSync,
-					"enableKanbanNormalizationProtection": this.settings.enableKanbanNormalizationProtection,
-					"isKanbanBoard": this.isKanbanBoard(currentFile),
-					"Checkbox mappings": this.settings.kanbanColumnCheckboxMappings,
-					"Last Kanban content stored": this.lastKanbanContent.has(currentFile.path),
+					enableKanbanToFileSync:
+						this.settings.enableKanbanToFileSync,
+					enableCustomCheckboxStates:
+						this.settings.enableCustomCheckboxStates,
+					enableKanbanAutoSync: this.settings.enableKanbanAutoSync,
+					enableKanbanNormalizationProtection:
+						this.settings.enableKanbanNormalizationProtection,
+					isKanbanBoard: this.isKanbanBoard(currentFile),
+					"Checkbox mappings":
+						this.settings.kanbanColumnCheckboxMappings,
+					"Last Kanban content stored": this.lastKanbanContent.has(
+						currentFile.path
+					),
 					"Auto-synced files": Array.from(this.autoSyncedFiles),
-					"Current file auto-synced": this.autoSyncedFiles.has(currentFile.path),
+					"Current file auto-synced": this.autoSyncedFiles.has(
+						currentFile.path
+					),
 					"isUpdatingFromKanban flag": this.isUpdatingFromKanban,
 					"lastFileContent length": this.lastFileContent.length,
-					"Last file update timestamp": this.lastFileUpdateMap.get(currentFile.path)
+					"Last file update timestamp": this.lastFileUpdateMap.get(
+						currentFile.path
+					),
 				};
 
 				// Show current file content preview
 				if (this.lastKanbanContent.has(currentFile.path)) {
-					const storedContent = this.lastKanbanContent.get(currentFile.path)!;
-					debugData["Stored content preview"] = `${storedContent.substring(0, 200)}...`;
+					const storedContent = this.lastKanbanContent.get(
+						currentFile.path
+					)!;
+					debugData[
+						"Stored content preview"
+					] = `${storedContent.substring(0, 200)}...`;
 				}
 
 				this.debugOutput("Kanban Sync Debug Info", debugData);
-				new Notice("Debug info logged to console. Check Developer Tools.");
+				new Notice(
+					"Debug info logged to console. Check Developer Tools."
+				);
 			},
 		});
 
@@ -592,8 +716,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 			name: "Reset Kanban auto-sync cache",
 			callback: () => {
 				this.autoSyncedFiles.clear();
-				new Notice("Auto-sync cache cleared. Kanban boards will be auto-synced again when opened.");
-				
+				new Notice(
+					"Auto-sync cache cleared. Kanban boards will be auto-synced again when opened."
+				);
+
 				this.logger.log("Auto-sync cache cleared");
 			},
 		});
@@ -613,20 +739,26 @@ export default class TaskProgressBarPlugin extends Plugin {
 					{
 						input: "- [/] Main task\n  - [ ] Sub-task 1\n  - [x] Sub-task 2",
 						target: "[x]",
-						expected: "- [x] Main task\n  - [ ] Sub-task 1\n  - [x] Sub-task 2"
+						expected:
+							"- [x] Main task\n  - [ ] Sub-task 1\n  - [x] Sub-task 2",
 					},
 					{
 						input: "- [ ] Simple task",
 						target: "[/]",
-						expected: "- [/] Simple task"
-					}
+						expected: "- [/] Simple task",
+					},
 				];
 
 				console.log("=== Testing Checkbox Update Function ===");
 				testCases.forEach((testCase, index) => {
-					const result = this.updateCheckboxStateInCardText(testCase.input, testCase.target);
+					const result = this.updateCheckboxStateInCardText(
+						testCase.input,
+						testCase.target
+					);
 					const passed = result === testCase.expected;
-					console.log(`Test ${index + 1}: ${passed ? 'PASSED' : 'FAILED'}`);
+					console.log(
+						`Test ${index + 1}: ${passed ? "PASSED" : "FAILED"}`
+					);
 					console.log(`Input: ${testCase.input}`);
 					console.log(`Expected: ${testCase.expected}`);
 					console.log(`Got: ${result}`);
@@ -641,21 +773,41 @@ export default class TaskProgressBarPlugin extends Plugin {
 					"  - Sub item",
 					"- [/] Task 2",
 					"",
-					"## In Progress", 
+					"## In Progress",
 					"- [/] Task 3",
-					"- [x] Task 4"
+					"- [x] Task 4",
 				];
 
 				const positionTests = [
-					{ card: "- [ ] Task 1\n  - Sub item", column: "Todo", expectedPos: 1 },
-					{ card: "- [/] Task 3", column: "In Progress", expectedPos: 6 },
-					{ card: "- [x] Non-existent", column: "Todo", expectedPos: -1 }
+					{
+						card: "- [ ] Task 1\n  - Sub item",
+						column: "Todo",
+						expectedPos: 1,
+					},
+					{
+						card: "- [/] Task 3",
+						column: "In Progress",
+						expectedPos: 6,
+					},
+					{
+						card: "- [x] Non-existent",
+						column: "Todo",
+						expectedPos: -1,
+					},
 				];
 
 				positionTests.forEach((test, index) => {
-					const result = this.findCardPositionInContent(test.card, testContent, test.column);
+					const result = this.findCardPositionInContent(
+						test.card,
+						testContent,
+						test.column
+					);
 					const passed = result === test.expectedPos;
-					console.log(`Position Test ${index + 1}: ${passed ? 'PASSED' : 'FAILED'}`);
+					console.log(
+						`Position Test ${index + 1}: ${
+							passed ? "PASSED" : "FAILED"
+						}`
+					);
 					console.log(`Card: ${test.card}`);
 					console.log(`Column: ${test.column}`);
 					console.log(`Expected Position: ${test.expectedPos}`);
@@ -663,7 +815,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 					console.log("---");
 				});
 
-				new Notice("Checkbox update and position finding tests completed. Check console for results.");
+				new Notice(
+					"Checkbox update and position finding tests completed. Check console for results."
+				);
 			},
 		});
 
@@ -676,9 +830,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 				this.lastKanbanContent.clear();
 				this.autoSyncedFiles.clear();
 				this.kanbanNormalizationDetector.clear();
-				
-				new Notice("Kanban conflict state reset. All tracking data cleared.");
-				
+
+				new Notice(
+					"Kanban conflict state reset. All tracking data cleared."
+				);
+
 				if (this.settings.showDebugInfo) {
 					console.log("Reset all Kanban conflict tracking:");
 					console.log("- isUpdatingFromKanban: false");
@@ -713,43 +869,62 @@ export default class TaskProgressBarPlugin extends Plugin {
 				const content = await this.app.vault.read(currentFile);
 				console.log("=== Kanban Normalization Detection Test ===");
 				console.log(`File: ${currentFile.path}`);
-				console.log(`Protection enabled: ${this.settings.enableKanbanNormalizationProtection}`);
-				
+				console.log(
+					`Protection enabled: ${this.settings.enableKanbanNormalizationProtection}`
+				);
+
 				// Show current detector state
-				const detector = this.kanbanNormalizationDetector.get(currentFile.path);
+				const detector = this.kanbanNormalizationDetector.get(
+					currentFile.path
+				);
 				if (detector) {
 					console.log("Detector state:", {
-						lastKanbanUIInteraction: new Date(detector.lastKanbanUIInteraction).toISOString(),
+						lastKanbanUIInteraction: new Date(
+							detector.lastKanbanUIInteraction
+						).toISOString(),
 						checkpointsCount: detector.preChangeCheckpoints.size,
-						pendingCheck: detector.pendingNormalizationCheck !== null
+						pendingCheck:
+							detector.pendingNormalizationCheck !== null,
 					});
 				} else {
 					console.log("No detector state found for this file");
 				}
 
 				// Test pattern detection with sample content
-				const testOldContent = content.replace(/\[\/\]/g, '[/]'); // Ensure we have custom states
-				const testNewContent = content.replace(/\[\/\]/g, '[x]'); // Simulate normalization
-				
-				const patterns = this.analyzeCheckboxNormalizationPatterns(testOldContent, testNewContent);
+				const testOldContent = content.replace(/\[\/\]/g, "[/]"); // Ensure we have custom states
+				const testNewContent = content.replace(/\[\/\]/g, "[x]"); // Simulate normalization
+
+				const patterns = this.analyzeCheckboxNormalizationPatterns(
+					testOldContent,
+					testNewContent
+				);
 				console.log("Pattern analysis result:", patterns);
 
 				// Test immediate detection
-				const hasImmediate = this.detectImmediateKanbanNormalization(testOldContent, testNewContent);
+				const hasImmediate = this.detectImmediateKanbanNormalization(
+					testOldContent,
+					testNewContent
+				);
 				console.log("Immediate normalization detection:", hasImmediate);
 
 				// Test revert function
 				if (hasImmediate) {
-					const reverted = this.revertKanbanNormalization(testOldContent, testNewContent, currentFile);
+					const reverted = this.revertKanbanNormalization(
+						testOldContent,
+						testNewContent,
+						currentFile
+					);
 					console.log("Revert test:", {
 						originalLength: testOldContent.length,
 						normalizedLength: testNewContent.length,
 						revertedLength: reverted.length,
-						revertedMatchesOriginal: reverted === testOldContent
+						revertedMatchesOriginal: reverted === testOldContent,
 					});
 				}
 
-				new Notice("Normalization detection test completed. Check console for results.");
+				new Notice(
+					"Normalization detection test completed. Check console for results."
+				);
 			},
 		});
 
@@ -764,36 +939,72 @@ export default class TaskProgressBarPlugin extends Plugin {
 					return;
 				}
 
-				this.app.vault.read(currentFile).then(content => {
+				this.app.vault.read(currentFile).then((content) => {
 					console.log("=== Custom Checkbox State Test ===");
 					console.log(`File: ${currentFile.path}`);
-					console.log(`Custom checkbox states enabled: ${this.settings.enableCustomCheckboxStates}`);
-					
+					console.log(
+						`Custom checkbox states enabled: ${this.settings.enableCustomCheckboxStates}`
+					);
+
 					if (this.settings.enableCustomCheckboxStates) {
-						const taskCounts = this.countTasksByCheckboxState(content);
-						console.log("Task counts by checkbox state:", taskCounts);
-						
-						let incompleteTasks = taskCounts[' '] || 0;
-						let completedTasks = taskCounts['x'] || 0;
+						const taskCounts =
+							this.countTasksByCheckboxState(content);
+						console.log(
+							"Task counts by checkbox state:",
+							taskCounts
+						);
+
+						let incompleteTasks = taskCounts[" "] || 0;
+						let completedTasks = taskCounts["x"] || 0;
 						let customStateTasks = 0;
-						
-						for (const [state, count] of Object.entries(taskCounts)) {
-							if (state !== ' ' && state !== 'x' && state.trim() !== '') {
+
+						for (const [state, count] of Object.entries(
+							taskCounts
+						)) {
+							if (
+								state !== " " &&
+								state !== "x" &&
+								state.trim() !== ""
+							) {
 								customStateTasks += count;
 							}
 						}
-						
-						console.log(`Incomplete: ${incompleteTasks}, Completed: ${completedTasks}, Custom states: ${customStateTasks}`);
-						console.log(`Total tasks: ${incompleteTasks + completedTasks + customStateTasks}`);
-						console.log(`Progress: ${Math.round((completedTasks / (incompleteTasks + completedTasks + customStateTasks)) * 100)}%`);
+
+						console.log(
+							`Incomplete: ${incompleteTasks}, Completed: ${completedTasks}, Custom states: ${customStateTasks}`
+						);
+						console.log(
+							`Total tasks: ${
+								incompleteTasks +
+								completedTasks +
+								customStateTasks
+							}`
+						);
+						console.log(
+							`Progress: ${Math.round(
+								(completedTasks /
+									(incompleteTasks +
+										completedTasks +
+										customStateTasks)) *
+									100
+							)}%`
+						);
 					} else {
 						console.log("Custom checkbox states are disabled");
-						const incompleteTasks = (content.match(/- \[ \]/g) || []).length;
-						const completedTasks = (content.match(/- \[x\]/gi) || []).length;
-						console.log(`Legacy counting - Incomplete: ${incompleteTasks}, Completed: ${completedTasks}`);
+						const incompleteTasks = (
+							content.match(/- \[ \]/g) || []
+						).length;
+						const completedTasks = (
+							content.match(/- \[x\]/gi) || []
+						).length;
+						console.log(
+							`Legacy counting - Incomplete: ${incompleteTasks}, Completed: ${completedTasks}`
+						);
 					}
-					
-					new Notice("Custom checkbox state test completed. Check console for results.");
+
+					new Notice(
+						"Custom checkbox state test completed. Check console for results."
+					);
 				});
 			},
 		});
@@ -816,11 +1027,21 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 				console.log("=== Card Movement Detection Test ===");
 				console.log(`File: ${currentFile.path}`);
-				console.log(`Last Kanban content stored: ${this.lastKanbanContent.has(currentFile.path)}`);
-				console.log(`Auto-synced: ${this.autoSyncedFiles.has(currentFile.path)}`);
-				console.log(`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`);
-				
-				const lastUpdateTime = this.lastFileUpdateMap.get(currentFile.path);
+				console.log(
+					`Last Kanban content stored: ${this.lastKanbanContent.has(
+						currentFile.path
+					)}`
+				);
+				console.log(
+					`Auto-synced: ${this.autoSyncedFiles.has(currentFile.path)}`
+				);
+				console.log(
+					`isUpdatingFromKanban: ${this.isUpdatingFromKanban}`
+				);
+
+				const lastUpdateTime = this.lastFileUpdateMap.get(
+					currentFile.path
+				);
 				if (lastUpdateTime) {
 					const timeSinceUpdate = Date.now() - lastUpdateTime;
 					console.log(`Time since last update: ${timeSinceUpdate}ms`);
@@ -833,16 +1054,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 					"- [x] [[Test Card]]",
 					"- [/] [[Another Card]]",
 					"- [ ] [[Todo Card]]",
-					"- [-] [[Cancelled Card]]"
+					"- [-] [[Cancelled Card]]",
 				];
 
 				console.log("Testing card normalization:");
-				testCards.forEach(card => {
-					const normalized = this.normalizeCardContentForComparison(card);
+				testCards.forEach((card) => {
+					const normalized =
+						this.normalizeCardContentForComparison(card);
 					console.log(`"${card}" -> "${normalized}"`);
 				});
 
-				new Notice("Card movement detection test completed. Check console for results.");
+				new Notice(
+					"Card movement detection test completed. Check console for results."
+				);
 			},
 		});
 
@@ -864,7 +1088,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 				const oldContent = this.lastKanbanContent.get(currentFile.path);
 				if (!oldContent) {
-					new Notice("No previous content stored. Try moving a card first.");
+					new Notice(
+						"No previous content stored. Try moving a card first."
+					);
 					return;
 				}
 
@@ -874,29 +1100,56 @@ export default class TaskProgressBarPlugin extends Plugin {
 				console.log(`File: ${currentFile.path}`);
 
 				try {
-					const actualMovements = await this.detectActualCardMovements(oldContent, newContent, currentFile);
-					console.log(`Detected ${actualMovements.length} actual card movements:`);
+					const actualMovements =
+						await this.detectActualCardMovements(
+							oldContent,
+							newContent,
+							currentFile
+						);
+					console.log(
+						`Detected ${actualMovements.length} actual card movements:`
+					);
 					actualMovements.forEach((movement, index) => {
-						console.log(`${index + 1}. "${movement.card.substring(0, 40)}..." from "${movement.oldColumn}" to "${movement.newColumn}"`);
+						console.log(
+							`${index + 1}. "${movement.card.substring(
+								0,
+								40
+							)}..." from "${movement.oldColumn}" to "${
+								movement.newColumn
+							}"`
+						);
 					});
 
 					if (actualMovements.length > 0) {
-						console.log("Testing updateCardCheckboxStatesInKanban with detected movements...");
-						const updatedContent = await this.updateCardCheckboxStatesInKanban(oldContent, newContent, currentFile, actualMovements);
-						console.log(`Content updated. Original length: ${newContent.length}, Updated length: ${updatedContent.length}`);
-						
+						console.log(
+							"Testing updateCardCheckboxStatesInKanban with detected movements..."
+						);
+						const updatedContent =
+							await this.updateCardCheckboxStatesInKanban(
+								oldContent,
+								newContent,
+								currentFile,
+								actualMovements
+							);
+						console.log(
+							`Content updated. Original length: ${newContent.length}, Updated length: ${updatedContent.length}`
+						);
+
 						if (updatedContent !== newContent) {
-							console.log("Content would be updated with checkbox state changes.");
+							console.log(
+								"Content would be updated with checkbox state changes."
+							);
 						} else {
 							console.log("No checkbox state changes needed.");
 						}
 					}
-
 				} catch (error) {
 					console.error("Error in simulation:", error);
 				}
 
-				new Notice("Card movement simulation completed. Check console for results.");
+				new Notice(
+					"Card movement simulation completed. Check console for results."
+				);
 			},
 		});
 
@@ -918,51 +1171,80 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 				console.log("=== Kanban Mappings and Board State Debug ===");
 				console.log(`File: ${currentFile.path}`);
-				console.log(`enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`);
-				
+				console.log(
+					`enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`
+				);
+
 				// Show current mappings
 				console.log("Current checkbox mappings:");
-				this.settings.kanbanColumnCheckboxMappings.forEach((mapping, index) => {
-					console.log(`  ${index + 1}. "${mapping.columnName}" → "${mapping.checkboxState}"`);
-				});
-				
+				this.settings.kanbanColumnCheckboxMappings.forEach(
+					(mapping, index) => {
+						console.log(
+							`  ${index + 1}. "${mapping.columnName}" → "${
+								mapping.checkboxState
+							}"`
+						);
+					}
+				);
+
 				// Parse and analyze current board state
 				const content = await this.app.vault.read(currentFile);
-				const kanban = await this.parseKanbanBoardContent(content, currentFile);
-				
+				const kanban = await this.parseKanbanBoardContent(
+					content,
+					currentFile
+				);
+
 				console.log("\nCurrent board state analysis:");
 				for (const [columnName, columnData] of Object.entries(kanban)) {
-					const expectedState = this.getCheckboxStateForColumn(columnName);
-					console.log(`\nColumn: "${columnName}" (expected state: "${expectedState}")`);
+					const expectedState =
+						this.getCheckboxStateForColumn(columnName);
+					console.log(
+						`\nColumn: "${columnName}" (expected state: "${expectedState}")`
+					);
 					console.log(`  Total cards: ${columnData.items.length}`);
-					
+
 					// Count checkbox states in this column
-					const stateCount: {[state: string]: number} = {};
+					const stateCount: { [state: string]: number } = {};
 					let correctCount = 0;
 					let incorrectCount = 0;
-					
+
 					columnData.items.forEach((item, index) => {
 						const match = item.text.match(/^(\s*- )\[([^\]]*)\]/);
 						if (match) {
 							const currentState = `[${match[2]}]`;
-							stateCount[currentState] = (stateCount[currentState] || 0) + 1;
-							
+							stateCount[currentState] =
+								(stateCount[currentState] || 0) + 1;
+
 							if (currentState === expectedState) {
 								correctCount++;
 							} else {
 								incorrectCount++;
-								console.log(`    ${index}: "${item.text.substring(0, 50)}..." has "${currentState}" but should be "${expectedState}"`);
+								console.log(
+									`    ${index}: "${item.text.substring(
+										0,
+										50
+									)}..." has "${currentState}" but should be "${expectedState}"`
+								);
 							}
 						} else {
-							console.log(`    ${index}: "${item.text.substring(0, 50)}..." - no checkbox found`);
+							console.log(
+								`    ${index}: "${item.text.substring(
+									0,
+									50
+								)}..." - no checkbox found`
+							);
 						}
 					});
-					
+
 					console.log(`  State distribution:`, stateCount);
-					console.log(`  Correct states: ${correctCount}, Incorrect states: ${incorrectCount}`);
+					console.log(
+						`  Correct states: ${correctCount}, Incorrect states: ${incorrectCount}`
+					);
 				}
-				
-				new Notice("Kanban mappings and board state debug completed. Check console for results.");
+
+				new Notice(
+					"Kanban mappings and board state debug completed. Check console for results."
+				);
 			},
 		});
 
@@ -984,16 +1266,25 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 				console.log("=== Manual Kanban Change Trigger ===");
 				console.log(`File: ${currentFile.path}`);
-				
+
 				try {
 					// Read current content
-					const currentContent = await this.app.vault.read(currentFile);
-					console.log(`Current content length: ${currentContent.length}`);
-					
+					const currentContent = await this.app.vault.read(
+						currentFile
+					);
+					console.log(
+						`Current content length: ${currentContent.length}`
+					);
+
 					// Trigger the change detection manually
-					await this.handleKanbanBoardChange(currentFile, currentContent);
-					
-					new Notice("Manually triggered Kanban board change detection. Check console for logs.");
+					await this.handleKanbanBoardChange(
+						currentFile,
+						currentContent
+					);
+
+					new Notice(
+						"Manually triggered Kanban board change detection. Check console for logs."
+					);
 				} catch (error) {
 					console.error("Error in manual trigger:", error);
 					new Notice(`Error: ${error.message}`);
@@ -1018,75 +1309,120 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}
 
 				if (!this.settings.enableCustomCheckboxStates) {
-					new Notice("Custom checkbox states are disabled. Enable them first in settings.");
+					new Notice(
+						"Custom checkbox states are disabled. Enable them first in settings."
+					);
 					return;
 				}
 
 				try {
 					// Set flag to prevent conflicts
 					this.isUpdatingFromKanban = true;
-					
+
 					console.log("=== Fixing All Checkbox States ===");
 					console.log(`File: ${currentFile.path}`);
-					
+
 					// Read current file content
 					const content = await this.app.vault.read(currentFile);
-					const kanban = await this.parseKanbanBoardContent(content, currentFile);
-					
+					const kanban = await this.parseKanbanBoardContent(
+						content,
+						currentFile
+					);
+
 					// Split content into lines for position-based replacement
-					const lines = content.split('\n');
+					const lines = content.split("\n");
 					let totalChanges = 0;
-					
+
 					// Process each column and fix all cards
-					for (const [columnName, columnData] of Object.entries(kanban)) {
-						const targetCheckboxState = this.getCheckboxStateForColumn(columnName);
-						console.log(`Fixing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`);
-						
+					for (const [columnName, columnData] of Object.entries(
+						kanban
+					)) {
+						const targetCheckboxState =
+							this.getCheckboxStateForColumn(columnName);
+						console.log(
+							`Fixing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`
+						);
+
 						// Update each card in this column
 						for (const item of columnData.items) {
-							const currentCheckboxMatch = item.text.match(/^(\s*- )\[([^\]]*)\]/);
-							const currentCheckboxState = currentCheckboxMatch ? `[${currentCheckboxMatch[2]}]` : null;
-							
+							const currentCheckboxMatch =
+								item.text.match(/^(\s*- )\[([^\]]*)\]/);
+							const currentCheckboxState = currentCheckboxMatch
+								? `[${currentCheckboxMatch[2]}]`
+								: null;
+
 							// Only update if the current state is different from target state
 							if (currentCheckboxState !== targetCheckboxState) {
-								const updatedCardText = this.updateCheckboxStateInCardText(item.text, targetCheckboxState);
-								
+								const updatedCardText =
+									this.updateCheckboxStateInCardText(
+										item.text,
+										targetCheckboxState
+									);
+
 								if (updatedCardText !== item.text) {
-									const cardPosition = this.findCardPositionInContent(item.text, lines, columnName);
+									const cardPosition =
+										this.findCardPositionInContent(
+											item.text,
+											lines,
+											columnName
+										);
 									if (cardPosition !== -1) {
 										// Replace only the specific card at the found position
-										const cardLines = item.text.split('\n');
-										const updatedCardLines = updatedCardText.split('\n');
-										
+										const cardLines = item.text.split("\n");
+										const updatedCardLines =
+											updatedCardText.split("\n");
+
 										// Replace the card lines at the specific position
-										lines.splice(cardPosition, cardLines.length, ...updatedCardLines);
+										lines.splice(
+											cardPosition,
+											cardLines.length,
+											...updatedCardLines
+										);
 										totalChanges++;
-										
-										console.log(`  Fixed card: "${item.text.substring(0, 30)}..." from "${currentCheckboxState}" to "${targetCheckboxState}"`);
+
+										console.log(
+											`  Fixed card: "${item.text.substring(
+												0,
+												30
+											)}..." from "${currentCheckboxState}" to "${targetCheckboxState}"`
+										);
 									}
 								}
 							}
 						}
 					}
-					
+
 					// Update the file if changes were made
 					if (totalChanges > 0) {
-						const updatedContent = lines.join('\n');
-						await this.app.vault.modify(currentFile, updatedContent);
-						
+						const updatedContent = lines.join("\n");
+						await this.app.vault.modify(
+							currentFile,
+							updatedContent
+						);
+
 						// Update stored content
-						this.lastKanbanContent.set(currentFile.path, updatedContent);
-						
-						console.log(`Fixed ${totalChanges} checkbox states in ${currentFile.basename}`);
-						new Notice(`Fixed ${totalChanges} checkbox states in ${currentFile.basename}`);
+						this.lastKanbanContent.set(
+							currentFile.path,
+							updatedContent
+						);
+
+						console.log(
+							`Fixed ${totalChanges} checkbox states in ${currentFile.basename}`
+						);
+						new Notice(
+							`Fixed ${totalChanges} checkbox states in ${currentFile.basename}`
+						);
 					} else {
-						console.log(`No changes needed - all checkbox states are already correct`);
+						console.log(
+							`No changes needed - all checkbox states are already correct`
+						);
 						new Notice("All checkbox states are already correct");
 					}
-					
 				} catch (error) {
 					console.error("Error fixing checkbox states:", error);
-					new Notice(`Error fixing checkbox states: ${error.message}`);
+					new Notice(
+						`Error fixing checkbox states: ${error.message}`
+					);
 				} finally {
 					// Reset flag
 					setTimeout(() => {
@@ -1139,17 +1475,33 @@ export default class TaskProgressBarPlugin extends Plugin {
 		try {
 			const { workspace } = this.app;
 
-			// If view already exists in leaves, show it
-			const leaves = workspace.getLeavesOfType("progress-tracker");
-			if (leaves.length > 0) {
-				workspace.revealLeaf(leaves[0]);
-				return;
-			}
-
-			// Otherwise, create a new leaf in the left sidebar
-			// Check if workspace is ready
+			// Wait for layout to be ready before checking for existing views
 			workspace.onLayoutReady(() => {
-				const leaf = workspace.getLeftLeaf(false);
+				// Check for existing leaves after layout is ready
+				const leaves = workspace.getLeavesOfType("progress-tracker");
+
+				// If multiple views exist, detach duplicates and keep only the first one
+				if (leaves.length > 1) {
+					this.logger.log(
+						`Found ${leaves.length} progress-tracker views, removing duplicates`
+					);
+					// Keep the first leaf, detach the rest
+					for (let i = 1; i < leaves.length; i++) {
+						leaves[i].detach();
+					}
+					// Reveal the remaining leaf
+					workspace.revealLeaf(leaves[0]);
+					return;
+				}
+
+				// If view already exists, just reveal it
+				if (leaves.length === 1) {
+					workspace.revealLeaf(leaves[0]);
+					return;
+				}
+
+				// Otherwise, create a new leaf in the right sidebar (as user preference)
+				const leaf = workspace.getRightLeaf(false);
 				if (leaf) {
 					leaf.setViewState({
 						type: "progress-tracker",
@@ -1198,7 +1550,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 			this.lastFileContent = "";
 
 			// Remove custom CSS styles
-			const existingStyle = document.getElementById("progress-tracker-max-tabs-height");
+			const existingStyle = document.getElementById(
+				"progress-tracker-max-tabs-height"
+			);
 			if (existingStyle) {
 				existingStyle.remove();
 			}
@@ -1245,7 +1599,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Validate CSS value to prevent XSS
 			const maxHeight = this.settings.maxTabsHeight;
 			if (!this.isValidCSSValue(maxHeight)) {
-				this.logger.error(`Invalid CSS value for maxTabsHeight: ${maxHeight}`);
+				this.logger.error(
+					`Invalid CSS value for maxTabsHeight: ${maxHeight}`
+				);
 				return;
 			}
 
@@ -1255,17 +1611,21 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			// Target only workspace-tabs containing our plugin view
 			if (!this.settings.showDebugInfo) {
-				// Use textContent instead of innerHTML for safety
+				// Target only the progress-tracker view content, not the entire tabs container
+				// Use textContent instead of innerHTML for safety: .workspace-tabs.mod-top .workspace-tab-container:has(.progress-tracker-leaf) {
 				style.textContent = `
-					.workspace-tabs.mod-top:has(.progress-tracker-leaf) {
-						max-height: ${maxHeight} !important;
-					}
-				`;
+				.workspace-tabs.mod-top.mod-top-right-space {
+				max-height: ${maxHeight} !important;
+				
+				}
+			`;
 				// Add the style to the document head
 				document.head.appendChild(style);
 			}
-			
-			this.logger.log(`Applied max-tabs-height: ${maxHeight} to Progress Tracker view`);
+
+			this.logger.log(
+				`Applied max-tabs-height: ${maxHeight} to Progress Tracker view`
+			);
 		} catch (error) {
 			this.logger.error("Error applying max tabs height style", error);
 		}
@@ -1277,11 +1637,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * @returns true if value is safe to use
 	 */
 	private isValidCSSValue(value: string): boolean {
-		if (!value || typeof value !== 'string') return false;
-		
+		if (!value || typeof value !== "string") return false;
+
 		// Allow specific safe values
-		if (value === 'auto' || value === 'none') return true;
-		
+		if (value === "auto" || value === "none") return true;
+
 		// Allow valid CSS length values (px, em, rem, vh, %)
 		const validCSSPattern = /^(\d+(\.\d+)?)(px|em|rem|vh|%)$/;
 		return validCSSPattern.test(value.trim());
@@ -1294,10 +1654,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 */
 	private debugOutput(title: string, data: Record<string, any>): void {
 		if (!this.settings.showDebugInfo) return;
-		
+
 		this.logger.log(`=== ${title} ===`);
 		Object.entries(data).forEach(([key, value]) => {
-			this.logger.log(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+			this.logger.log(
+				`${key}: ${
+					typeof value === "object" ? JSON.stringify(value) : value
+				}`
+			);
 		});
 	}
 
@@ -1308,25 +1672,28 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 */
 	private isValidFile(file: TFile): boolean {
 		if (!file) return false;
-		
+
 		// Check if file path is safe (no path traversal)
-		if (file.path.includes('..') || file.path.includes('//')) {
+		if (file.path.includes("..") || file.path.includes("//")) {
 			this.logger.error(`Unsafe file path detected: ${file.path}`);
 			return false;
 		}
-		
+
 		// Check if file is markdown
-		if (!file.path.endsWith('.md')) {
+		if (!file.path.endsWith(".md")) {
 			this.logger.warn(`Non-markdown file: ${file.path}`);
 			return false;
 		}
-		
+
 		// Check file size (prevent processing extremely large files)
-		if (file.stat.size > 10 * 1024 * 1024) { // 10MB limit
-			this.logger.error(`File too large: ${file.path} (${file.stat.size} bytes)`);
+		if (file.stat.size > 10 * 1024 * 1024) {
+			// 10MB limit
+			this.logger.error(
+				`File too large: ${file.path} (${file.stat.size} bytes)`
+			);
 			return false;
 		}
-		
+
 		return true;
 	}
 
@@ -1336,29 +1703,32 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * @returns true if content is safe to process
 	 */
 	private isValidContent(content: string): boolean {
-		if (typeof content !== 'string') return false;
-		
+		if (typeof content !== "string") return false;
+
 		// Check content size
-		if (content.length > 5 * 1024 * 1024) { // 5MB limit
-			this.logger.error(`Content too large: ${content.length} characters`);
+		if (content.length > 5 * 1024 * 1024) {
+			// 5MB limit
+			this.logger.error(
+				`Content too large: ${content.length} characters`
+			);
 			return false;
 		}
-		
+
 		// Check for suspicious patterns that might indicate injection
 		const suspiciousPatterns = [
 			/<script[^>]*>/i,
 			/javascript:/i,
 			/data:text\/html/i,
-			/vbscript:/i
+			/vbscript:/i,
 		];
-		
+
 		for (const pattern of suspiciousPatterns) {
 			if (pattern.test(content)) {
 				this.logger.error(`Suspicious content pattern detected`);
 				return false;
 			}
 		}
-		
+
 		return true;
 	}
 
@@ -1376,12 +1746,12 @@ export default class TaskProgressBarPlugin extends Plugin {
 	private checkRateLimit(filePath: string): boolean {
 		const now = Date.now();
 		const lastOperation = this.fileOperationLimiter.get(filePath);
-		
-		if (lastOperation && (now - lastOperation) < this.FILE_OPERATION_DELAY) {
+
+		if (lastOperation && now - lastOperation < this.FILE_OPERATION_DELAY) {
 			this.logger.warn(`Rate limited file operation: ${filePath}`);
 			return false;
 		}
-		
+
 		this.fileOperationLimiter.set(filePath, now);
 		return true;
 	}
@@ -1392,12 +1762,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * @param context Context where error occurred
 	 * @param showNotice Whether to show user notification
 	 */
-	private handleError(error: Error | string, context: string, showNotice: boolean = false): void {
+	private handleError(
+		error: Error | string,
+		context: string,
+		showNotice: boolean = false
+	): void {
 		const errorMessage = error instanceof Error ? error.message : error;
 		const fullMessage = `${context}: ${errorMessage}`;
-		
-		this.logger.error(fullMessage, error instanceof Error ? error : undefined);
-		
+
+		this.logger.error(
+			fullMessage,
+			error instanceof Error ? error : undefined
+		);
+
 		if (showNotice) {
 			new Notice(`Progress Tracker Error: ${errorMessage}`);
 		}
@@ -1429,19 +1806,31 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * @param newContent Current file content
 	 * @returns true if task-related changes detected
 	 */
-	private hasTaskContentChanged(oldContent: string, newContent: string): boolean {
+	private hasTaskContentChanged(
+		oldContent: string,
+		newContent: string
+	): boolean {
 		// Split content into lines
-		const oldLines = oldContent.split('\n');
-		const newLines = newContent.split('\n');
+		const oldLines = oldContent.split("\n");
+		const newLines = newContent.split("\n");
 
 		// Find task lines in both contents - support all checkbox states
-		const oldTasks = oldLines.filter(line => line.trim().match(/^[-*] \[[^\]]*\]/i));
-		const newTasks = newLines.filter(line => line.trim().match(/^[-*] \[[^\]]*\]/i));
+		const oldTasks = oldLines.filter((line) =>
+			line.trim().match(/^[-*] \[[^\]]*\]/i)
+		);
+		const newTasks = newLines.filter((line) =>
+			line.trim().match(/^[-*] \[[^\]]*\]/i)
+		);
 
 		// Compare task count
 		if (oldTasks.length !== newTasks.length) {
 			if (this.settings.showDebugInfo) {
-				console.log('Task count changed:', oldTasks.length, '->', newTasks.length);
+				console.log(
+					"Task count changed:",
+					oldTasks.length,
+					"->",
+					newTasks.length
+				);
 			}
 			return true;
 		}
@@ -1450,14 +1839,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 		for (let i = 0; i < oldTasks.length; i++) {
 			if (oldTasks[i] !== newTasks[i]) {
 				if (this.settings.showDebugInfo) {
-					console.log('Task content changed:', oldTasks[i], '->', newTasks[i]);
+					console.log(
+						"Task content changed:",
+						oldTasks[i],
+						"->",
+						newTasks[i]
+					);
 				}
 				return true;
 			}
 		}
 
 		if (this.settings.showDebugInfo) {
-			console.log('No task-related changes detected');
+			console.log("No task-related changes detected");
 		}
 		return false;
 	}
@@ -1476,11 +1870,16 @@ export default class TaskProgressBarPlugin extends Plugin {
 	/**
 	 * Handle changes in Kanban board files to detect card movements and update card checkbox states
 	 */
-	async handleKanbanBoardChange(kanbanFile: TFile, newContent: string): Promise<void> {
+	async handleKanbanBoardChange(
+		kanbanFile: TFile,
+		newContent: string
+	): Promise<void> {
 		try {
 			// Validate inputs
 			if (!this.isValidFile(kanbanFile)) {
-				this.logger.error(`Invalid file for Kanban board change: ${kanbanFile?.path}`);
+				this.logger.error(
+					`Invalid file for Kanban board change: ${kanbanFile?.path}`
+				);
 				return;
 			}
 
@@ -1494,12 +1893,19 @@ export default class TaskProgressBarPlugin extends Plugin {
 				return;
 			}
 
-			this.logger.log(`handleKanbanBoardChange called for: ${kanbanFile.path}`);
-			this.logger.log(`Settings - enableKanbanToFileSync: ${this.settings.enableKanbanToFileSync}, enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`);
+			this.logger.log(
+				`handleKanbanBoardChange called for: ${kanbanFile.path}`
+			);
+			this.logger.log(
+				`Settings - enableKanbanToFileSync: ${this.settings.enableKanbanToFileSync}, enableCustomCheckboxStates: ${this.settings.enableCustomCheckboxStates}`
+			);
 
-			if (!this.settings.enableKanbanToFileSync || !this.settings.enableCustomCheckboxStates) {
+			if (
+				!this.settings.enableKanbanToFileSync ||
+				!this.settings.enableCustomCheckboxStates
+			) {
 				if (this.settings.showDebugInfo) {
-					console.log('Kanban sync disabled, skipping...');
+					console.log("Kanban sync disabled, skipping...");
 				}
 				return;
 			}
@@ -1510,17 +1916,23 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// CRITICAL FIX: Check if we're currently updating from auto-sync or other operations
 			if (this.isUpdatingFromKanban) {
 				if (this.settings.showDebugInfo) {
-					console.log('Skipping card movement detection - currently updating from auto-sync or other operations');
+					console.log(
+						"Skipping card movement detection - currently updating from auto-sync or other operations"
+					);
 				}
 				return;
 			}
 
 			// CRITICAL FIX: Check if auto-sync recently ran on this file
 			if (this.autoSyncedFiles.has(filePath)) {
-				const timeSinceLastUpdate = Date.now() - (this.lastFileUpdateMap.get(filePath) || 0);
-				if (timeSinceLastUpdate < 2000) { // If auto-sync ran within last 2 seconds
+				const timeSinceLastUpdate =
+					Date.now() - (this.lastFileUpdateMap.get(filePath) || 0);
+				if (timeSinceLastUpdate < 2000) {
+					// If auto-sync ran within last 2 seconds
 					if (this.settings.showDebugInfo) {
-						console.log(`Skipping card movement detection - auto-sync ran recently (${timeSinceLastUpdate}ms ago)`);
+						console.log(
+							`Skipping card movement detection - auto-sync ran recently (${timeSinceLastUpdate}ms ago)`
+						);
 					}
 					// Still update the stored content for next comparison
 					this.lastKanbanContent.set(filePath, newContent);
@@ -1532,7 +1944,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 			this.lastFileUpdateMap.set(filePath, Date.now());
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Old content length: ${oldContent.length}, New content length: ${newContent.length}`);
+				console.log(
+					`Old content length: ${oldContent.length}, New content length: ${newContent.length}`
+				);
 			}
 
 			// Store the new content for next comparison
@@ -1541,7 +1955,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Skip if this is the first time we see this file
 			if (!oldContent) {
 				if (this.settings.showDebugInfo) {
-					console.log(`First time seeing Kanban board: ${filePath}, storing content for next time`);
+					console.log(
+						`First time seeing Kanban board: ${filePath}, storing content for next time`
+					);
 				}
 				return;
 			}
@@ -1549,53 +1965,86 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Skip if content is identical
 			if (oldContent === newContent) {
 				if (this.settings.showDebugInfo) {
-					console.log('Content unchanged, skipping...');
+					console.log("Content unchanged, skipping...");
 				}
 				return;
 			}
 
 			// STEP 1: Detect actual card movements first
-			const actualCardMovements = await this.detectActualCardMovements(oldContent, newContent, kanbanFile);
-			
+			const actualCardMovements = await this.detectActualCardMovements(
+				oldContent,
+				newContent,
+				kanbanFile
+			);
+
 			if (this.settings.showDebugInfo) {
-				console.log(`Detected ${actualCardMovements.length} actual card movements:`, actualCardMovements);
+				console.log(
+					`Detected ${actualCardMovements.length} actual card movements:`,
+					actualCardMovements
+				);
 			}
 
 			// STEP 2: Process legitimate card movements and update their checkbox states
 			let finalContent = newContent;
 			if (actualCardMovements.length > 0) {
-				finalContent = await this.updateCardCheckboxStatesInKanban(oldContent, newContent, kanbanFile, actualCardMovements);
-				
+				finalContent = await this.updateCardCheckboxStatesInKanban(
+					oldContent,
+					newContent,
+					kanbanFile,
+					actualCardMovements
+				);
+
 				if (this.settings.showDebugInfo) {
-					console.log(`Updated content for ${actualCardMovements.length} card movements`);
+					console.log(
+						`Updated content for ${actualCardMovements.length} card movements`
+					);
 				}
 			}
 
 			// STEP 3: Apply protection for non-moved cards (only if protection is enabled)
 			if (this.settings.enableKanbanNormalizationProtection) {
-				const isKanbanNormalization = await this.detectKanbanNormalization(kanbanFile, oldContent, finalContent, actualCardMovements);
+				const isKanbanNormalization =
+					await this.detectKanbanNormalization(
+						kanbanFile,
+						oldContent,
+						finalContent,
+						actualCardMovements
+					);
 				if (isKanbanNormalization) {
 					if (this.settings.showDebugInfo) {
-						console.log('Detected Kanban plugin normalization - protecting custom checkbox states for non-moved cards');
+						console.log(
+							"Detected Kanban plugin normalization - protecting custom checkbox states for non-moved cards"
+						);
 					}
-					finalContent = await this.protectCustomCheckboxStatesSelective(kanbanFile, oldContent, finalContent, actualCardMovements);
+					finalContent =
+						await this.protectCustomCheckboxStatesSelective(
+							kanbanFile,
+							oldContent,
+							finalContent,
+							actualCardMovements
+						);
 				}
 			}
 
 			// STEP 4: Proactively sync all checkbox states to match column mappings
-			finalContent = await this.syncAllCheckboxStatesToMappings(kanbanFile, finalContent);
+			finalContent = await this.syncAllCheckboxStatesToMappings(
+				kanbanFile,
+				finalContent
+			);
 
 			// STEP 5: Update the Kanban board file if content changed
 			if (finalContent !== newContent) {
 				if (this.settings.showDebugInfo) {
-					console.log(`Content will be updated. Original length: ${newContent.length}, Final length: ${finalContent.length}`);
+					console.log(
+						`Content will be updated. Original length: ${newContent.length}, Final length: ${finalContent.length}`
+					);
 				}
 
 				// Set flag to prevent infinite loops
 				this.isUpdatingFromKanban = true;
-				
+
 				await this.app.vault.modify(kanbanFile, finalContent);
-				
+
 				// Update our stored content
 				this.lastKanbanContent.set(filePath, finalContent);
 
@@ -1603,7 +2052,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 				await this.forceRefreshKanbanUI(kanbanFile);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Successfully updated checkbox states in Kanban board: ${kanbanFile.basename}`);
+					console.log(
+						`Successfully updated checkbox states in Kanban board: ${kanbanFile.basename}`
+					);
 				}
 
 				// Reset flag after a short delay
@@ -1612,10 +2063,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}, 300);
 			} else {
 				if (this.settings.showDebugInfo) {
-					console.log('No checkbox state changes needed');
+					console.log("No checkbox state changes needed");
 				}
 			}
-
 		} catch (error) {
 			this.handleError(error as Error, "handleKanbanBoardChange", false);
 		}
@@ -1626,32 +2076,57 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Returns array of card movements with old and new column information
 	 */
 	private async detectActualCardMovements(
-		oldContent: string, 
-		newContent: string, 
+		oldContent: string,
+		newContent: string,
 		kanbanFile: TFile
-	): Promise<Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}>> {
+	): Promise<
+		Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}>
+	> {
 		try {
-			const movements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}> = [];
-			
+			const movements: Array<{
+				card: string;
+				oldColumn: string;
+				newColumn: string;
+				cardIndex: number;
+			}> = [];
+
 			// Parse both old and new Kanban structures
-			const oldKanban = await this.parseKanbanBoardContent(oldContent, kanbanFile);
-			const newKanban = await this.parseKanbanBoardContent(newContent, kanbanFile);
+			const oldKanban = await this.parseKanbanBoardContent(
+				oldContent,
+				kanbanFile
+			);
+			const newKanban = await this.parseKanbanBoardContent(
+				newContent,
+				kanbanFile
+			);
 
 			// Create more precise card tracking with position information
-			const oldCardPositions = new Map<string, Array<{column: string, index: number, originalText: string}>>();
-			const newCardPositions = new Map<string, Array<{column: string, index: number, originalText: string}>>();
+			const oldCardPositions = new Map<
+				string,
+				Array<{ column: string; index: number; originalText: string }>
+			>();
+			const newCardPositions = new Map<
+				string,
+				Array<{ column: string; index: number; originalText: string }>
+			>();
 
 			// Populate old card positions map
 			for (const [columnName, columnData] of Object.entries(oldKanban)) {
 				columnData.items.forEach((item, index) => {
-					const normalizedCard = this.normalizeCardContentForComparison(item.text);
+					const normalizedCard =
+						this.normalizeCardContentForComparison(item.text);
 					if (!oldCardPositions.has(normalizedCard)) {
 						oldCardPositions.set(normalizedCard, []);
 					}
 					oldCardPositions.get(normalizedCard)!.push({
 						column: columnName,
 						index: index,
-						originalText: item.text
+						originalText: item.text,
 					});
 				});
 			}
@@ -1659,14 +2134,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Populate new card positions and detect movements
 			for (const [columnName, columnData] of Object.entries(newKanban)) {
 				columnData.items.forEach((item, index) => {
-					const normalizedCard = this.normalizeCardContentForComparison(item.text);
+					const normalizedCard =
+						this.normalizeCardContentForComparison(item.text);
 					if (!newCardPositions.has(normalizedCard)) {
 						newCardPositions.set(normalizedCard, []);
 					}
 					newCardPositions.get(normalizedCard)!.push({
 						column: columnName,
 						index: index,
-						originalText: item.text
+						originalText: item.text,
 					});
 				});
 			}
@@ -1674,39 +2150,55 @@ export default class TaskProgressBarPlugin extends Plugin {
 			// Detect movements by comparing card distributions across columns
 			for (const [normalizedCard, newPositions] of newCardPositions) {
 				const oldPositions = oldCardPositions.get(normalizedCard) || [];
-				
+
 				// Check for cards that appear in new columns where they weren't before
 				for (const newPos of newPositions) {
-					const wasInThisColumn = oldPositions.some(oldPos => oldPos.column === newPos.column);
-					
+					const wasInThisColumn = oldPositions.some(
+						(oldPos) => oldPos.column === newPos.column
+					);
+
 					if (!wasInThisColumn && oldPositions.length > 0) {
 						// This card appears in a new column - it's a movement
 						// Find the most likely source column (the one that lost a card)
 						const oldColumnCounts = new Map<string, number>();
 						const newColumnCounts = new Map<string, number>();
-						
+
 						// Count cards in each column
-						oldPositions.forEach(pos => {
-							oldColumnCounts.set(pos.column, (oldColumnCounts.get(pos.column) || 0) + 1);
+						oldPositions.forEach((pos) => {
+							oldColumnCounts.set(
+								pos.column,
+								(oldColumnCounts.get(pos.column) || 0) + 1
+							);
 						});
-						newPositions.forEach(pos => {
-							newColumnCounts.set(pos.column, (newColumnCounts.get(pos.column) || 0) + 1);
+						newPositions.forEach((pos) => {
+							newColumnCounts.set(
+								pos.column,
+								(newColumnCounts.get(pos.column) || 0) + 1
+							);
 						});
-						
+
 						// Find column that lost a card
 						for (const [oldColumn, oldCount] of oldColumnCounts) {
-							const newCount = newColumnCounts.get(oldColumn) || 0;
+							const newCount =
+								newColumnCounts.get(oldColumn) || 0;
 							if (newCount < oldCount) {
 								// This column lost a card - it's likely the source
 								movements.push({
 									card: normalizedCard,
 									oldColumn: oldColumn,
 									newColumn: newPos.column,
-									cardIndex: newPos.index
+									cardIndex: newPos.index,
 								});
-								
+
 								if (this.settings.showDebugInfo) {
-									console.log(`Detected card movement: "${normalizedCard.substring(0, 30)}..." from "${oldColumn}" to "${newPos.column}"`);
+									console.log(
+										`Detected card movement: "${normalizedCard.substring(
+											0,
+											30
+										)}..." from "${oldColumn}" to "${
+											newPos.column
+										}"`
+									);
 								}
 								break; // Only record one movement per card instance
 							}
@@ -1717,7 +2209,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			return movements;
 		} catch (error) {
-			this.handleError(error as Error, "detectActualCardMovements", false);
+			this.handleError(
+				error as Error,
+				"detectActualCardMovements",
+				false
+			);
 			return [];
 		}
 	}
@@ -1728,7 +2224,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 */
 	private normalizeCardContentForComparison(cardContent: string): string {
 		return cardContent
-			.replace(/^(\s*- )\[[^\]]*\](.*)$/gm, '$1$2') // Remove checkbox states
+			.replace(/^(\s*- )\[[^\]]*\](.*)$/gm, "$1$2") // Remove checkbox states
 			.trim(); // Remove extra whitespace
 	}
 
@@ -1737,45 +2233,69 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Uses position-based replacement to avoid affecting wrong cards
 	 */
 	private async updateCardCheckboxStatesInKanban(
-		oldContent: string, 
-		newContent: string, 
+		oldContent: string,
+		newContent: string,
 		kanbanFile: TFile,
-		actualCardMovements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}>
+		actualCardMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}>
 	): Promise<string> {
 		try {
 			if (this.settings.showDebugInfo) {
-				console.log('Starting card checkbox state update process...');
-				console.log(`Processing ${actualCardMovements.length} actual card movements`);
+				console.log("Starting card checkbox state update process...");
+				console.log(
+					`Processing ${actualCardMovements.length} actual card movements`
+				);
 			}
 
 			// If no actual card movements, return original content
 			if (actualCardMovements.length === 0) {
 				if (this.settings.showDebugInfo) {
-					console.log('No actual card movements to process, returning original content');
+					console.log(
+						"No actual card movements to process, returning original content"
+					);
 				}
 				return newContent;
 			}
 
 			// Parse new Kanban structure to find cards to update
-			const newKanban = await this.parseKanbanBoardContent(newContent, kanbanFile);
+			const newKanban = await this.parseKanbanBoardContent(
+				newContent,
+				kanbanFile
+			);
 
 			// Split content into lines for position-based replacement
-			const lines = newContent.split('\n');
+			const lines = newContent.split("\n");
 			let changesFound = 0;
 
 			// Process only the cards that actually moved
 			for (const movement of actualCardMovements) {
-				const { card: normalizedCard, oldColumn, newColumn, cardIndex } = movement;
+				const {
+					card: normalizedCard,
+					oldColumn,
+					newColumn,
+					cardIndex,
+				} = movement;
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Processing movement: "${normalizedCard.substring(0, 30)}..." from "${oldColumn}" to "${newColumn}"`);
+					console.log(
+						`Processing movement: "${normalizedCard.substring(
+							0,
+							30
+						)}..." from "${oldColumn}" to "${newColumn}"`
+					);
 				}
 
 				// Find the actual card in the new content using the specific index
 				const targetColumn = newKanban[newColumn];
 				if (!targetColumn) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Target column "${newColumn}" not found in new content`);
+						console.log(
+							`Target column "${newColumn}" not found in new content`
+						);
 					}
 					continue;
 				}
@@ -1783,28 +2303,40 @@ export default class TaskProgressBarPlugin extends Plugin {
 				// Use the specific card index to get the exact card that moved
 				if (cardIndex >= targetColumn.items.length) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Card index ${cardIndex} out of range for column "${newColumn}" (has ${targetColumn.items.length} items)`);
+						console.log(
+							`Card index ${cardIndex} out of range for column "${newColumn}" (has ${targetColumn.items.length} items)`
+						);
 					}
 					continue;
 				}
 
 				const foundCard = targetColumn.items[cardIndex];
-				
+
 				// Double-check that this is the right card
-				const itemNormalized = this.normalizeCardContentForComparison(foundCard.text);
+				const itemNormalized = this.normalizeCardContentForComparison(
+					foundCard.text
+				);
 				if (itemNormalized !== normalizedCard) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Card at index ${cardIndex} doesn't match expected content. Expected: "${normalizedCard}", Found: "${itemNormalized}"`);
+						console.log(
+							`Card at index ${cardIndex} doesn't match expected content. Expected: "${normalizedCard}", Found: "${itemNormalized}"`
+						);
 					}
 					continue;
 				}
 
 				// Update the checkbox state for this card
-				const targetCheckboxState = this.getCheckboxStateForColumn(newColumn);
-				const updatedCardText = this.updateCheckboxStateInCardText(foundCard.text, targetCheckboxState);
+				const targetCheckboxState =
+					this.getCheckboxStateForColumn(newColumn);
+				const updatedCardText = this.updateCheckboxStateInCardText(
+					foundCard.text,
+					targetCheckboxState
+				);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Target checkbox state: "${targetCheckboxState}"`);
+					console.log(
+						`Target checkbox state: "${targetCheckboxState}"`
+					);
 					console.log(`Original card: ${foundCard.text}`);
 					console.log(`Updated card: ${updatedCardText}`);
 				}
@@ -1812,39 +2344,58 @@ export default class TaskProgressBarPlugin extends Plugin {
 				// Use position-based replacement to update only this specific card
 				if (updatedCardText !== foundCard.text) {
 					// Use the specific card index to find the exact position in the content
-					const cardPosition = this.findCardPositionByIndex(lines, newColumn, cardIndex);
+					const cardPosition = this.findCardPositionByIndex(
+						lines,
+						newColumn,
+						cardIndex
+					);
 					if (cardPosition !== -1) {
 						// Replace only the specific card at the found position
-						const cardLines = foundCard.text.split('\n');
-						const updatedCardLines = updatedCardText.split('\n');
-						
+						const cardLines = foundCard.text.split("\n");
+						const updatedCardLines = updatedCardText.split("\n");
+
 						// Replace the card lines at the specific position
-						lines.splice(cardPosition, cardLines.length, ...updatedCardLines);
+						lines.splice(
+							cardPosition,
+							cardLines.length,
+							...updatedCardLines
+						);
 						changesFound++;
 
 						if (this.settings.showDebugInfo) {
-							console.log(`Successfully updated card checkbox state at position ${cardPosition} (index ${cardIndex}) from "${oldColumn}" to "${newColumn}": ${targetCheckboxState}`);
+							console.log(
+								`Successfully updated card checkbox state at position ${cardPosition} (index ${cardIndex}) from "${oldColumn}" to "${newColumn}": ${targetCheckboxState}`
+							);
 						}
 					} else {
 						if (this.settings.showDebugInfo) {
-							console.log(`Could not find position for card at index ${cardIndex} in column "${newColumn}"`);
+							console.log(
+								`Could not find position for card at index ${cardIndex} in column "${newColumn}"`
+							);
 						}
 					}
 				} else {
 					if (this.settings.showDebugInfo) {
-						console.log(`No changes needed for card (already has correct checkbox state)`);
+						console.log(
+							`No changes needed for card (already has correct checkbox state)`
+						);
 					}
 				}
 			}
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Card checkbox update complete. Changes found: ${changesFound} out of ${actualCardMovements.length} movements`);
+				console.log(
+					`Card checkbox update complete. Changes found: ${changesFound} out of ${actualCardMovements.length} movements`
+				);
 			}
 
-			return lines.join('\n');
-
+			return lines.join("\n");
 		} catch (error) {
-			this.handleError(error as Error, "updateCardCheckboxStatesInKanban", false);
+			this.handleError(
+				error as Error,
+				"updateCardCheckboxStatesInKanban",
+				false
+			);
 			return newContent; // Return original content if there's an error
 		}
 	}
@@ -1853,7 +2404,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Parse Kanban board content into structure (simplified implementation)
 	 */
 	private async parseKanbanBoardContent(
-		content: string, 
+		content: string,
 		file: TFile
 	): Promise<Record<string, { items: Array<{ text: string }> }>> {
 		const kanban: Record<string, { items: Array<{ text: string }> }> = {};
@@ -1864,14 +2415,14 @@ export default class TaskProgressBarPlugin extends Plugin {
 			}
 
 			// Split content into lines
-			const lines = content.split('\n');
-			let currentColumn = '';
+			const lines = content.split("\n");
+			let currentColumn = "";
 
 			for (let i = 0; i < lines.length; i++) {
 				const line = lines[i];
 
 				// Check for column header (## Column Name)
-				if (line.startsWith('## ')) {
+				if (line.startsWith("## ")) {
 					currentColumn = line.substring(3).trim();
 					if (!kanban[currentColumn]) {
 						kanban[currentColumn] = { items: [] };
@@ -1883,42 +2434,56 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}
 
 				// Check for list item (starts with "- ")
-				if (currentColumn && line.trim().startsWith('- ')) {
+				if (currentColumn && line.trim().startsWith("- ")) {
 					// Get complete card content including sub-items
 					let cardText = line;
 					let j = i + 1;
-					
+
 					// Include indented sub-items
-					while (j < lines.length && (lines[j].startsWith('  ') || lines[j].startsWith('\t') || lines[j].trim() === '')) {
-						cardText += '\n' + lines[j];
+					while (
+						j < lines.length &&
+						(lines[j].startsWith("  ") ||
+							lines[j].startsWith("\t") ||
+							lines[j].trim() === "")
+					) {
+						cardText += "\n" + lines[j];
 						j++;
 					}
-					
+
 					kanban[currentColumn].items.push({ text: cardText });
-					
+
 					if (this.settings.showDebugInfo) {
-						console.log(`Found card in ${currentColumn}: ${cardText.substring(0, 50)}...`);
+						console.log(
+							`Found card in ${currentColumn}: ${cardText.substring(
+								0,
+								50
+							)}...`
+						);
 					}
-					
+
 					// Skip the lines we already processed
 					i = j - 1;
 				}
 			}
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Parsed ${Object.keys(kanban).length} columns:`, Object.keys(kanban));
+				console.log(
+					`Parsed ${Object.keys(kanban).length} columns:`,
+					Object.keys(kanban)
+				);
 				Object.entries(kanban).forEach(([col, data]) => {
 					console.log(`  ${col}: ${data.items.length} items`);
 					data.items.forEach((item, index) => {
-						console.log(`    ${index}: ${item.text.substring(0, 50)}...`);
+						console.log(
+							`    ${index}: ${item.text.substring(0, 50)}...`
+						);
 					});
 				});
 			}
-
 		} catch (error) {
-			console.error('Error parsing Kanban content:', error);
+			console.error("Error parsing Kanban content:", error);
 			if (this.settings.showDebugInfo) {
-				console.error('Error details:', error);
+				console.error("Error details:", error);
 			}
 		}
 
@@ -1929,23 +2494,28 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Find which column a card is in within a Kanban structure
 	 */
 	private findCardInKanban(
-		cardText: string, 
+		cardText: string,
 		kanban: Record<string, { items: Array<{ text: string }> }>
 	): string | null {
 		const trimmedCardText = cardText.trim();
-		
+
 		for (const [columnName, columnData] of Object.entries(kanban)) {
 			for (const item of columnData.items) {
 				const trimmedItemText = item.text.trim();
 				if (trimmedItemText === trimmedCardText) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Found exact match for card "${trimmedCardText.substring(0, 30)}..." in column "${columnName}"`);
+						console.log(
+							`Found exact match for card "${trimmedCardText.substring(
+								0,
+								30
+							)}..." in column "${columnName}"`
+						);
 					}
 					return columnName;
 				}
 			}
 		}
-		
+
 		// Try fuzzy matching if exact match fails
 		for (const [columnName, columnData] of Object.entries(kanban)) {
 			for (const item of columnData.items) {
@@ -1953,15 +2523,25 @@ export default class TaskProgressBarPlugin extends Plugin {
 				// Check if the core content matches (ignoring potential whitespace differences)
 				if (this.areCardsEquivalent(trimmedCardText, trimmedItemText)) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Found fuzzy match for card "${trimmedCardText.substring(0, 30)}..." in column "${columnName}"`);
+						console.log(
+							`Found fuzzy match for card "${trimmedCardText.substring(
+								0,
+								30
+							)}..." in column "${columnName}"`
+						);
 					}
 					return columnName;
 				}
 			}
 		}
-		
+
 		if (this.settings.showDebugInfo) {
-			console.log(`No match found for card "${trimmedCardText.substring(0, 30)}..." in any column`);
+			console.log(
+				`No match found for card "${trimmedCardText.substring(
+					0,
+					30
+				)}..." in any column`
+			);
 		}
 		return null;
 	}
@@ -1973,7 +2553,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 		// Extract the main link content from both cards
 		const link1 = this.extractMainLinkFromCard(card1);
 		const link2 = this.extractMainLinkFromCard(card2);
-		
+
 		return !!(link1 && link2 && link1 === link2);
 	}
 
@@ -1986,29 +2566,29 @@ export default class TaskProgressBarPlugin extends Plugin {
 		if (obsidianMatch) {
 			return obsidianMatch[1];
 		}
-		
+
 		// Look for [text](url) pattern
 		const markdownMatch = cardText.match(/\[([^\]]+)\]\(([^)]+)\)/);
 		if (markdownMatch) {
 			return markdownMatch[2]; // Return the URL part
 		}
-		
+
 		return null;
 	}
-
-
 
 	/**
 	 * Extract Obsidian-style links from content (reused logic)
 	 */
-	private extractObsidianLinks(content: string): Array<{path: string, alias?: string}> {
-		const links: Array<{path: string, alias?: string}> = [];
+	private extractObsidianLinks(
+		content: string
+	): Array<{ path: string; alias?: string }> {
+		const links: Array<{ path: string; alias?: string }> = [];
 		const linkPattern = /\[\[(.*?)\]\]/g;
 		let match;
 
 		while ((match = linkPattern.exec(content)) !== null) {
 			const [_, linkContent] = match;
-			const [path, alias] = linkContent.split("|").map(s => s.trim());
+			const [path, alias] = linkContent.split("|").map((s) => s.trim());
 			links.push({ path, alias });
 		}
 
@@ -2018,8 +2598,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 	/**
 	 * Extract Markdown-style links from content (reused logic)
 	 */
-	private extractMarkdownLinks(content: string): Array<{text: string, url: string}> {
-		const links: Array<{text: string, url: string}> = [];
+	private extractMarkdownLinks(
+		content: string
+	): Array<{ text: string; url: string }> {
+		const links: Array<{ text: string; url: string }> = [];
 		const linkPattern = /\[(.*?)\]\((.*?)\)/g;
 		let match;
 
@@ -2031,8 +2613,6 @@ export default class TaskProgressBarPlugin extends Plugin {
 		return links;
 	}
 
-
-
 	/**
 	 * Get checkbox state for a specific kanban column (reused logic)
 	 */
@@ -2042,7 +2622,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 		}
 
 		const mapping = this.settings.kanbanColumnCheckboxMappings.find(
-			m => m.columnName.toLowerCase() === columnName.toLowerCase()
+			(m) => m.columnName.toLowerCase() === columnName.toLowerCase()
 		);
 
 		return mapping ? mapping.checkboxState : "[ ]";
@@ -2051,45 +2631,57 @@ export default class TaskProgressBarPlugin extends Plugin {
 	/**
 	 * Find the exact position of a card within content lines under a specific column
 	 */
-	private findCardPositionInContent(cardText: string, lines: string[], targetColumn: string): number {
-		let currentColumn = '';
+	private findCardPositionInContent(
+		cardText: string,
+		lines: string[],
+		targetColumn: string
+	): number {
+		let currentColumn = "";
 		let inTargetColumn = false;
-		
+
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			
+
 			// Check for column header
-			if (line.startsWith('## ')) {
+			if (line.startsWith("## ")) {
 				currentColumn = line.substring(3).trim();
-				inTargetColumn = currentColumn.toLowerCase() === targetColumn.toLowerCase();
+				inTargetColumn =
+					currentColumn.toLowerCase() === targetColumn.toLowerCase();
 				continue;
 			}
-			
+
 			// Only check for cards when we're in the target column
-			if (inTargetColumn && line.trim().startsWith('- ')) {
+			if (inTargetColumn && line.trim().startsWith("- ")) {
 				// Get complete card content including sub-items
 				let completeCardText = line;
 				let j = i + 1;
-				
+
 				// Include indented sub-items
-				while (j < lines.length && (lines[j].startsWith('  ') || lines[j].startsWith('\t') || lines[j].trim() === '')) {
-					completeCardText += '\n' + lines[j];
+				while (
+					j < lines.length &&
+					(lines[j].startsWith("  ") ||
+						lines[j].startsWith("\t") ||
+						lines[j].trim() === "")
+				) {
+					completeCardText += "\n" + lines[j];
 					j++;
 				}
-				
+
 				// Check if this matches our target card
 				if (completeCardText.trim() === cardText.trim()) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Found card at position ${i} in column "${targetColumn}"`);
+						console.log(
+							`Found card at position ${i} in column "${targetColumn}"`
+						);
 					}
 					return i;
 				}
-				
+
 				// Skip the lines we already processed
 				i = j - 1;
 			}
 		}
-		
+
 		if (this.settings.showDebugInfo) {
 			console.log(`Card not found in column "${targetColumn}"`);
 		}
@@ -2100,45 +2692,59 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Find the exact position of a card by its index within a specific column
 	 * This is more precise than content matching for avoiding duplicates
 	 */
-	private findCardPositionByIndex(lines: string[], targetColumn: string, cardIndex: number): number {
-		let currentColumn = '';
+	private findCardPositionByIndex(
+		lines: string[],
+		targetColumn: string,
+		cardIndex: number
+	): number {
+		let currentColumn = "";
 		let inTargetColumn = false;
 		let cardCount = 0;
-		
+
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			
+
 			// Check for column header
-			if (line.startsWith('## ')) {
+			if (line.startsWith("## ")) {
 				currentColumn = line.substring(3).trim();
-				inTargetColumn = currentColumn.toLowerCase() === targetColumn.toLowerCase();
+				inTargetColumn =
+					currentColumn.toLowerCase() === targetColumn.toLowerCase();
 				cardCount = 0; // Reset card count for new column
 				continue;
 			}
-			
+
 			// Only check for cards when we're in the target column
-			if (inTargetColumn && line.trim().startsWith('- ')) {
+			if (inTargetColumn && line.trim().startsWith("- ")) {
 				// Check if this is the card we're looking for
 				if (cardCount === cardIndex) {
 					if (this.settings.showDebugInfo) {
-						console.log(`Found card at position ${i} (index ${cardIndex}) in column "${targetColumn}"`);
+						console.log(
+							`Found card at position ${i} (index ${cardIndex}) in column "${targetColumn}"`
+						);
 					}
 					return i;
 				}
-				
+
 				cardCount++;
-				
+
 				// Skip sub-items to avoid counting them as separate cards
 				let j = i + 1;
-				while (j < lines.length && (lines[j].startsWith('  ') || lines[j].startsWith('\t') || lines[j].trim() === '')) {
+				while (
+					j < lines.length &&
+					(lines[j].startsWith("  ") ||
+						lines[j].startsWith("\t") ||
+						lines[j].trim() === "")
+				) {
 					j++;
 				}
 				i = j - 1;
 			}
 		}
-		
+
 		if (this.settings.showDebugInfo) {
-			console.log(`Card at index ${cardIndex} not found in column "${targetColumn}" (found ${cardCount} cards total)`);
+			console.log(
+				`Card at index ${cardIndex} not found in column "${targetColumn}" (found ${cardCount} cards total)`
+			);
 		}
 		return -1;
 	}
@@ -2147,33 +2753,41 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Update checkbox state in a single card text
 	 * Only updates the main card checkbox, preserving sub-items and nested checkboxes
 	 */
-	private updateCheckboxStateInCardText(cardText: string, targetCheckboxState: string): string {
+	private updateCheckboxStateInCardText(
+		cardText: string,
+		targetCheckboxState: string
+	): string {
 		// Split content into lines to process only the first line (main card)
-		const lines = cardText.split('\n');
+		const lines = cardText.split("\n");
 		if (lines.length === 0) return cardText;
 
 		// Pattern to match various checkbox states: - [ ], - [x], - [/], - [>], etc.
 		// Remove global flag to only match once per line
 		const checkboxPattern = /^(\s*[-*] )\[[^\]]*\](.*)$/;
-		
+
 		// Only update the first line if it matches the pattern (main card line)
 		if (checkboxPattern.test(lines[0])) {
-			lines[0] = lines[0].replace(checkboxPattern, (match, prefix, suffix) => {
-				return `${prefix}${targetCheckboxState}${suffix}`;
-			});
+			lines[0] = lines[0].replace(
+				checkboxPattern,
+				(match, prefix, suffix) => {
+					return `${prefix}${targetCheckboxState}${suffix}`;
+				}
+			);
 		}
 
 		// Join lines back together, preserving sub-items unchanged
-		return lines.join('\n');
+		return lines.join("\n");
 	}
 
 	/**
 	 * Count tasks with different checkbox states
 	 */
-	private countTasksByCheckboxState(content: string): { [state: string]: number } {
+	private countTasksByCheckboxState(content: string): {
+		[state: string]: number;
+	} {
 		const taskCounts: { [state: string]: number } = {};
-		const lines = content.split('\n');
-		
+		const lines = content.split("\n");
+
 		for (const line of lines) {
 			const match = line.trim().match(/^- \[([^\]]*)\]/);
 			if (match) {
@@ -2190,10 +2804,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Returns true if this appears to be a normalization rather than user-intended change
 	 */
 	private async detectKanbanNormalization(
-		kanbanFile: TFile, 
-		oldContent: string, 
+		kanbanFile: TFile,
+		oldContent: string,
 		newContent: string,
-		knownMovements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}> = []
+		knownMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}> = []
 	): Promise<boolean> {
 		try {
 			const filePath = kanbanFile.path;
@@ -2204,17 +2823,26 @@ export default class TaskProgressBarPlugin extends Plugin {
 				this.kanbanNormalizationDetector.set(filePath, {
 					preChangeCheckpoints: new Map(),
 					lastKanbanUIInteraction: 0,
-					pendingNormalizationCheck: null
+					pendingNormalizationCheck: null,
 				});
 			}
 
 			const detector = this.kanbanNormalizationDetector.get(filePath)!;
 
 			// Analyze the pattern of changes first
-			const normalizationPatterns = this.analyzeCheckboxNormalizationPatterns(oldContent, newContent);
+			const normalizationPatterns =
+				this.analyzeCheckboxNormalizationPatterns(
+					oldContent,
+					newContent
+				);
 
-					// Enhanced detection logic - focus on content patterns rather than timing
-		const hasUnwantedNormalization = this.detectUnwantedKanbanNormalization(oldContent, newContent, knownMovements);
+			// Enhanced detection logic - focus on content patterns rather than timing
+			const hasUnwantedNormalization =
+				this.detectUnwantedKanbanNormalization(
+					oldContent,
+					newContent,
+					knownMovements
+				);
 
 			// Update interaction timestamp for future detections
 			detector.lastKanbanUIInteraction = now;
@@ -2223,13 +2851,15 @@ export default class TaskProgressBarPlugin extends Plugin {
 				console.log(`Kanban normalization analysis for ${filePath}:`, {
 					normalizationPatterns,
 					hasUnwantedNormalization,
-					contentLengthSame: oldContent.length === newContent.length
+					contentLengthSame: oldContent.length === newContent.length,
 				});
 			}
 
 			// Return true if this looks like unwanted Kanban normalization
-			return hasUnwantedNormalization || normalizationPatterns.hasNormalization;
-
+			return (
+				hasUnwantedNormalization ||
+				normalizationPatterns.hasNormalization
+			);
 		} catch (error) {
 			console.error("Error detecting Kanban normalization:", error);
 			return false;
@@ -2240,73 +2870,93 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * NEW: Detect unwanted Kanban normalization based on content patterns
 	 */
 	private detectUnwantedKanbanNormalization(
-		oldContent: string, 
+		oldContent: string,
 		newContent: string,
-		knownMovements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}> = []
+		knownMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}> = []
 	): boolean {
 		// Check if this is a case where custom states are being converted to [x] inappropriately
-		const oldLines = oldContent.split('\n');
-		const newLines = newContent.split('\n');
-		
+		const oldLines = oldContent.split("\n");
+		const newLines = newContent.split("\n");
+
 		// Look for patterns where custom states in non-completed columns get converted to [x]
 		for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
 			const oldLine = oldLines[i];
 			const newLine = newLines[i];
-			
+
 			// Find what column this line is in
-			let currentColumn = '';
+			let currentColumn = "";
 			for (let j = i; j >= 0; j--) {
-				if (oldLines[j].startsWith('## ')) {
+				if (oldLines[j].startsWith("## ")) {
 					currentColumn = oldLines[j].substring(3).trim();
 					break;
 				}
 			}
-			
+
 			// Check for unwanted normalization
 			const oldMatch = oldLine.match(/^(\s*- )\[([^\]]*)\]/);
 			const newMatch = newLine.match(/^(\s*- )\[([^\]]*)\]/);
-			
+
 			if (oldMatch && newMatch && currentColumn) {
 				const oldState = oldMatch[2];
 				const newState = newMatch[2];
-				
+
 				// Get expected state for this column
-				const expectedState = this.getCheckboxStateForColumn(currentColumn);
-				const expectedStateChar = expectedState.replace(/[\[\]]/g, '');
-				
+				const expectedState =
+					this.getCheckboxStateForColumn(currentColumn);
+				const expectedStateChar = expectedState.replace(/[\[\]]/g, "");
+
 				// Check if this change is part of a legitimate movement
-				const isLegitimateMovement = knownMovements.some(movement => 
-					movement.newColumn.toLowerCase() === currentColumn.toLowerCase()
+				const isLegitimateMovement = knownMovements.some(
+					(movement) =>
+						movement.newColumn.toLowerCase() ===
+						currentColumn.toLowerCase()
 				);
 
 				// Detect unwanted conversion: custom state → [x] when it should be something else
 				// BUT only if it's not part of a legitimate movement
-				if (oldState === expectedStateChar && // old state was correct for column
-					newState === 'x' && // new state is [x] 
-					expectedStateChar !== 'x' && // but column shouldn't be [x]
-					!isLegitimateMovement) { // and it's not a legitimate movement
-					
+				if (
+					oldState === expectedStateChar && // old state was correct for column
+					newState === "x" && // new state is [x]
+					expectedStateChar !== "x" && // but column shouldn't be [x]
+					!isLegitimateMovement
+				) {
+					// and it's not a legitimate movement
+
 					if (this.settings.showDebugInfo) {
-						console.log(`Detected unwanted normalization in column "${currentColumn}": [${oldState}] → [${newState}] (expected: ${expectedState})`);
+						console.log(
+							`Detected unwanted normalization in column "${currentColumn}": [${oldState}] → [${newState}] (expected: ${expectedState})`
+						);
 					}
 					return true;
 				}
 			}
 		}
-		
+
 		return false;
 	}
 
 	/**
 	 * NEW: Analyze checkbox normalization patterns
 	 */
-	private analyzeCheckboxNormalizationPatterns(oldContent: string, newContent: string): {
+	private analyzeCheckboxNormalizationPatterns(
+		oldContent: string,
+		newContent: string
+	): {
 		hasNormalization: boolean;
-		normalizedStates: Array<{line: number, from: string, to: string}>;
+		normalizedStates: Array<{ line: number; from: string; to: string }>;
 	} {
-		const oldLines = oldContent.split('\n');
-		const newLines = newContent.split('\n');
-		const normalizedStates: Array<{line: number, from: string, to: string}> = [];
+		const oldLines = oldContent.split("\n");
+		const newLines = newContent.split("\n");
+		const normalizedStates: Array<{
+			line: number;
+			from: string;
+			to: string;
+		}> = [];
 
 		for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
 			const oldLine = oldLines[i];
@@ -2321,13 +2971,17 @@ export default class TaskProgressBarPlugin extends Plugin {
 				const newState = newCheckboxMatch[2];
 
 				// Detect normalization: custom state → standard state
-				if (oldState !== newState && 
-					oldState !== ' ' && oldState !== 'x' && // old was custom
-					(newState === 'x' || newState === ' ')) { // new is standard
+				if (
+					oldState !== newState &&
+					oldState !== " " &&
+					oldState !== "x" && // old was custom
+					(newState === "x" || newState === " ")
+				) {
+					// new is standard
 					normalizedStates.push({
 						line: i,
 						from: `[${oldState}]`,
-						to: `[${newState}]`
+						to: `[${newState}]`,
 					});
 				}
 			}
@@ -2335,7 +2989,7 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 		return {
 			hasNormalization: normalizedStates.length > 0,
-			normalizedStates
+			normalizedStates,
 		};
 	}
 
@@ -2344,45 +2998,54 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Restores custom states while preserving legitimate changes
 	 */
 	private async protectCustomCheckboxStates(
-		kanbanFile: TFile, 
-		oldContent: string, 
+		kanbanFile: TFile,
+		oldContent: string,
 		newContent: string
 	): Promise<void> {
 		try {
 			const filePath = kanbanFile.path;
-			
+
 			// Analyze what was normalized
-			const analysis = this.analyzeCheckboxNormalizationPatterns(oldContent, newContent);
-			
+			const analysis = this.analyzeCheckboxNormalizationPatterns(
+				oldContent,
+				newContent
+			);
+
 			if (!analysis.hasNormalization) {
 				if (this.settings.showDebugInfo) {
-					console.log('No normalization detected, no protection needed');
+					console.log(
+						"No normalization detected, no protection needed"
+					);
 				}
 				return;
 			}
 
 			// Create protected content by restoring custom states
 			const protectedContent = this.restoreCustomCheckboxStates(
-				oldContent, 
-				newContent, 
+				oldContent,
+				newContent,
 				analysis.normalizedStates,
 				kanbanFile
 			);
 
 			if (protectedContent !== newContent) {
 				if (this.settings.showDebugInfo) {
-					console.log(`Protecting ${analysis.normalizedStates.length} custom checkbox states from normalization`);
-					analysis.normalizedStates.forEach(state => {
-						console.log(`  Line ${state.line}: ${state.from} → ${state.to} (restoring ${state.from})`);
+					console.log(
+						`Protecting ${analysis.normalizedStates.length} custom checkbox states from normalization`
+					);
+					analysis.normalizedStates.forEach((state) => {
+						console.log(
+							`  Line ${state.line}: ${state.from} → ${state.to} (restoring ${state.from})`
+						);
 					});
 				}
 
 				// Set flag to prevent infinite loops
 				this.isUpdatingFromKanban = true;
-				
+
 				// Apply protection
 				await this.app.vault.modify(kanbanFile, protectedContent);
-				
+
 				// Update stored content
 				this.lastKanbanContent.set(filePath, protectedContent);
 
@@ -2392,10 +3055,11 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}, 300);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Successfully protected custom checkbox states in: ${kanbanFile.basename}`);
+					console.log(
+						`Successfully protected custom checkbox states in: ${kanbanFile.basename}`
+					);
 				}
 			}
-
 		} catch (error) {
 			console.error("Error protecting custom checkbox states:", error);
 			if (this.settings.showDebugInfo) {
@@ -2409,63 +3073,88 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Allows legitimate checkbox state changes for moved cards while protecting others
 	 */
 	private async protectCustomCheckboxStatesSelective(
-		kanbanFile: TFile, 
-		oldContent: string, 
+		kanbanFile: TFile,
+		oldContent: string,
 		newContent: string,
-		knownMovements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}>
+		knownMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}>
 	): Promise<string> {
 		try {
 			// Analyze what was normalized
-			const analysis = this.analyzeCheckboxNormalizationPatterns(oldContent, newContent);
-			
+			const analysis = this.analyzeCheckboxNormalizationPatterns(
+				oldContent,
+				newContent
+			);
+
 			if (!analysis.hasNormalization) {
 				if (this.settings.showDebugInfo) {
-					console.log('No normalization detected, no selective protection needed');
+					console.log(
+						"No normalization detected, no selective protection needed"
+					);
 				}
 				return newContent;
 			}
 
 			// Filter out normalizations that correspond to legitimate movements
-			const legitimateNormalizations = this.filterLegitimateNormalizations(
-				analysis.normalizedStates, 
-				knownMovements, 
-				newContent, 
-				kanbanFile
-			);
+			const legitimateNormalizations =
+				this.filterLegitimateNormalizations(
+					analysis.normalizedStates,
+					knownMovements,
+					newContent,
+					kanbanFile
+				);
 
 			// Only protect states that are NOT part of legitimate movements
-			const statesNeedingProtection = analysis.normalizedStates.filter((state: {line: number, from: string, to: string}) => 
-				!legitimateNormalizations.includes(state)
+			const statesNeedingProtection = analysis.normalizedStates.filter(
+				(state: { line: number; from: string; to: string }) =>
+					!legitimateNormalizations.includes(state)
 			);
 
 			if (statesNeedingProtection.length === 0) {
 				if (this.settings.showDebugInfo) {
-					console.log('All normalizations are legitimate movements, no protection needed');
+					console.log(
+						"All normalizations are legitimate movements, no protection needed"
+					);
 				}
 				return newContent;
 			}
 
 			// Create protected content by restoring only non-legitimate changes
 			const protectedContent = this.restoreCustomCheckboxStates(
-				oldContent, 
-				newContent, 
+				oldContent,
+				newContent,
 				statesNeedingProtection,
 				kanbanFile
 			);
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Selectively protecting ${statesNeedingProtection.length} out of ${analysis.normalizedStates.length} normalized states`);
-				console.log(`Allowing ${legitimateNormalizations.length} legitimate state changes from card movements`);
-				statesNeedingProtection.forEach((state: {line: number, from: string, to: string}) => {
-					console.log(`  Protecting line ${state.line}: ${state.from} → ${state.to} (restoring ${state.from})`);
-				});
-				legitimateNormalizations.forEach((state: {line: number, from: string, to: string}) => {
-					console.log(`  Allowing line ${state.line}: ${state.from} → ${state.to} (legitimate movement)`);
-				});
+				console.log(
+					`Selectively protecting ${statesNeedingProtection.length} out of ${analysis.normalizedStates.length} normalized states`
+				);
+				console.log(
+					`Allowing ${legitimateNormalizations.length} legitimate state changes from card movements`
+				);
+				statesNeedingProtection.forEach(
+					(state: { line: number; from: string; to: string }) => {
+						console.log(
+							`  Protecting line ${state.line}: ${state.from} → ${state.to} (restoring ${state.from})`
+						);
+					}
+				);
+				legitimateNormalizations.forEach(
+					(state: { line: number; from: string; to: string }) => {
+						console.log(
+							`  Allowing line ${state.line}: ${state.from} → ${state.to} (legitimate movement)`
+						);
+					}
+				);
 			}
 
 			return protectedContent;
-
 		} catch (error) {
 			console.error("Error in selective protection:", error);
 			if (this.settings.showDebugInfo) {
@@ -2479,35 +3168,38 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * NEW: Restore custom checkbox states while preserving other changes
 	 */
 	private restoreCustomCheckboxStates(
-		oldContent: string, 
-		newContent: string, 
-		normalizedStates: Array<{line: number, from: string, to: string}>,
+		oldContent: string,
+		newContent: string,
+		normalizedStates: Array<{ line: number; from: string; to: string }>,
 		kanbanFile: TFile
 	): string {
-		const lines = newContent.split('\n');
+		const lines = newContent.split("\n");
 		let restoredCount = 0;
 
 		for (const normalizedState of normalizedStates) {
 			const lineIndex = normalizedState.line;
-			
+
 			if (lineIndex < lines.length) {
 				const line = lines[lineIndex];
-				
+
 				// Only restore if the column mapping supports this custom state
 				const columnName = this.findLineColumn(line, lines, lineIndex);
 				if (columnName) {
-					const expectedState = this.getCheckboxStateForColumn(columnName);
-					
+					const expectedState =
+						this.getCheckboxStateForColumn(columnName);
+
 					// If the old state matches what we expect for this column, restore it
 					if (normalizedState.from === expectedState) {
 						lines[lineIndex] = line.replace(
-							normalizedState.to, 
+							normalizedState.to,
 							normalizedState.from
 						);
 						restoredCount++;
-						
+
 						if (this.settings.showDebugInfo) {
-							console.log(`Restored line ${lineIndex}: ${normalizedState.to} → ${normalizedState.from} for column "${columnName}"`);
+							console.log(
+								`Restored line ${lineIndex}: ${normalizedState.to} → ${normalizedState.from} for column "${columnName}"`
+							);
 						}
 					}
 				}
@@ -2515,48 +3207,64 @@ export default class TaskProgressBarPlugin extends Plugin {
 		}
 
 		if (this.settings.showDebugInfo) {
-			console.log(`Restored ${restoredCount} out of ${normalizedStates.length} normalized states`);
+			console.log(
+				`Restored ${restoredCount} out of ${normalizedStates.length} normalized states`
+			);
 		}
 
-		return lines.join('\n');
+		return lines.join("\n");
 	}
 
 	/**
 	 * NEW: Filter out normalizations that correspond to legitimate card movements
 	 */
 	private filterLegitimateNormalizations(
-		normalizedStates: Array<{line: number, from: string, to: string}>,
-		knownMovements: Array<{card: string, oldColumn: string, newColumn: string, cardIndex: number}>,
+		normalizedStates: Array<{ line: number; from: string; to: string }>,
+		knownMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+			cardIndex: number;
+		}>,
 		newContent: string,
 		kanbanFile: TFile
-	): Array<{line: number, from: string, to: string}> {
-		const legitimateNormalizations: Array<{line: number, from: string, to: string}> = [];
-		const lines = newContent.split('\n');
+	): Array<{ line: number; from: string; to: string }> {
+		const legitimateNormalizations: Array<{
+			line: number;
+			from: string;
+			to: string;
+		}> = [];
+		const lines = newContent.split("\n");
 
 		for (const normalizedState of normalizedStates) {
 			const lineIndex = normalizedState.line;
-			
+
 			if (lineIndex < lines.length) {
 				const line = lines[lineIndex];
-				
+
 				// Find which column this line is in
 				const columnName = this.findLineColumn(line, lines, lineIndex);
 				if (columnName) {
 					// Check if there's a known movement to this column
-					const hasMovementToColumn = knownMovements.some(movement => 
-						movement.newColumn.toLowerCase() === columnName.toLowerCase()
+					const hasMovementToColumn = knownMovements.some(
+						(movement) =>
+							movement.newColumn.toLowerCase() ===
+							columnName.toLowerCase()
 					);
-					
+
 					if (hasMovementToColumn) {
 						// Get expected state for this column
-						const expectedState = this.getCheckboxStateForColumn(columnName);
-						
+						const expectedState =
+							this.getCheckboxStateForColumn(columnName);
+
 						// If the normalization results in the expected state for this column, it's legitimate
 						if (normalizedState.to === expectedState) {
 							legitimateNormalizations.push(normalizedState);
-							
+
 							if (this.settings.showDebugInfo) {
-								console.log(`Legitimate normalization at line ${lineIndex}: ${normalizedState.from} → ${normalizedState.to} for column "${columnName}"`);
+								console.log(
+									`Legitimate normalization at line ${lineIndex}: ${normalizedState.from} → ${normalizedState.to} for column "${columnName}"`
+								);
 							}
 						}
 					}
@@ -2571,39 +3279,48 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * NEW: Check if card movements would cause unwanted normalization
 	 */
 	private checkMovementsForUnwantedNormalization(
-		cardMovements: Array<{card: string, oldColumn: string, newColumn: string}>,
+		cardMovements: Array<{
+			card: string;
+			oldColumn: string;
+			newColumn: string;
+		}>,
 		newContent: string,
 		kanbanFile: TFile
 	): boolean {
 		for (const movement of cardMovements) {
 			const { newColumn } = movement;
-			
+
 			// Get expected checkbox state for target column
 			const expectedState = this.getCheckboxStateForColumn(newColumn);
-			const expectedStateChar = expectedState.replace(/[\[\]]/g, '');
-			
+			const expectedStateChar = expectedState.replace(/[\[\]]/g, "");
+
 			// Check if the current content already has cards with correct states for this column
-			const lines = newContent.split('\n');
+			const lines = newContent.split("\n");
 			let inTargetColumn = false;
-			let currentColumn = '';
-			
+			let currentColumn = "";
+
 			for (const line of lines) {
-				if (line.startsWith('## ')) {
+				if (line.startsWith("## ")) {
 					currentColumn = line.substring(3).trim();
 					inTargetColumn = currentColumn === newColumn;
 					continue;
 				}
-				
-				if (inTargetColumn && line.trim().startsWith('- [')) {
+
+				if (inTargetColumn && line.trim().startsWith("- [")) {
 					const match = line.match(/^(\s*- )\[([^\]]*)\]/);
 					if (match) {
 						const currentState = match[2];
-						
+
 						// If we find cards in target column that already have the expected state,
 						// and they would be changed to [x], this is unwanted normalization
-						if (currentState === expectedStateChar && expectedStateChar !== 'x') {
+						if (
+							currentState === expectedStateChar &&
+							expectedStateChar !== "x"
+						) {
 							if (this.settings.showDebugInfo) {
-								console.log(`Movement to column "${newColumn}" would cause unwanted normalization: [${currentState}] → [x] (expected: ${expectedState})`);
+								console.log(
+									`Movement to column "${newColumn}" would cause unwanted normalization: [${currentState}] → [x] (expected: ${expectedState})`
+								);
 							}
 							return true;
 						}
@@ -2611,18 +3328,22 @@ export default class TaskProgressBarPlugin extends Plugin {
 				}
 			}
 		}
-		
+
 		return false;
 	}
 
 	/**
 	 * NEW: Find which column a line belongs to
 	 */
-	private findLineColumn(line: string, allLines: string[], lineIndex: number): string | null {
+	private findLineColumn(
+		line: string,
+		allLines: string[],
+		lineIndex: number
+	): string | null {
 		// Search backwards from current line to find the column header
 		for (let i = lineIndex; i >= 0; i--) {
 			const currentLine = allLines[i];
-			if (currentLine.startsWith('## ')) {
+			if (currentLine.startsWith("## ")) {
 				return currentLine.substring(3).trim();
 			}
 		}
@@ -2633,51 +3354,66 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * NEW: Detect immediate Kanban normalization (real-time detection)
 	 * Enhanced to detect multiple-line normalization patterns
 	 */
-	private detectImmediateKanbanNormalization(oldContent: string, newContent: string): boolean {
-		const oldLines = oldContent.split('\n');
-		const newLines = newContent.split('\n');
+	private detectImmediateKanbanNormalization(
+		oldContent: string,
+		newContent: string
+	): boolean {
+		const oldLines = oldContent.split("\n");
+		const newLines = newContent.split("\n");
 		let normalizationCount = 0;
 		let customToXConversions = 0;
-		
+
 		// Look for lines where custom checkbox states were converted to [x]
 		for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
 			const oldLine = oldLines[i];
 			const newLine = newLines[i];
-			
+
 			const oldMatch = oldLine.match(/^(\s*- )\[([^\]]*)\]/);
 			const newMatch = newLine.match(/^(\s*- )\[([^\]]*)\]/);
-			
+
 			if (oldMatch && newMatch) {
 				const oldState = oldMatch[2];
 				const newState = newMatch[2];
-				
+
 				// Count any checkbox state changes
 				if (oldState !== newState) {
 					normalizationCount++;
-					
+
 					// Specifically track custom state → [x] conversions
-					if (oldState !== ' ' && oldState !== 'x' && newState === 'x') {
+					if (
+						oldState !== " " &&
+						oldState !== "x" &&
+						newState === "x"
+					) {
 						customToXConversions++;
-						
+
 						if (this.settings.showDebugInfo) {
-							console.log(`Immediate normalization detected: [${oldState}] → [${newState}] on line ${i}`);
+							console.log(
+								`Immediate normalization detected: [${oldState}] → [${newState}] on line ${i}`
+							);
 						}
 					}
 				}
 			}
 		}
-		
+
 		// Enhanced detection criteria:
 		// 1. Multiple custom states converted to [x] (strong indicator of Kanban normalization)
 		// 2. High ratio of custom→[x] conversions vs total changes
 		const hasMultipleCustomToX = customToXConversions >= 2;
-		const hasHighCustomToXRatio = normalizationCount > 0 && (customToXConversions / normalizationCount) >= 0.5;
-		
+		const hasHighCustomToXRatio =
+			normalizationCount > 0 &&
+			customToXConversions / normalizationCount >= 0.5;
+
 		if (this.settings.showDebugInfo) {
-			console.log(`Enhanced normalization detection: ${customToXConversions} custom→[x] out of ${normalizationCount} total changes`);
-			console.log(`hasMultipleCustomToX: ${hasMultipleCustomToX}, hasHighCustomToXRatio: ${hasHighCustomToXRatio}`);
+			console.log(
+				`Enhanced normalization detection: ${customToXConversions} custom→[x] out of ${normalizationCount} total changes`
+			);
+			console.log(
+				`hasMultipleCustomToX: ${hasMultipleCustomToX}, hasHighCustomToXRatio: ${hasHighCustomToXRatio}`
+			);
 		}
-		
+
 		return hasMultipleCustomToX || hasHighCustomToXRatio;
 	}
 
@@ -2685,142 +3421,204 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * NEW: Revert Kanban normalization by restoring custom states
 	 * Enhanced to handle multiple normalizations and better column detection
 	 */
-	private revertKanbanNormalization(oldContent: string, newContent: string, kanbanFile: TFile): string {
-		const oldLines = oldContent.split('\n');
-		const newLines = newContent.split('\n');
+	private revertKanbanNormalization(
+		oldContent: string,
+		newContent: string,
+		kanbanFile: TFile
+	): string {
+		const oldLines = oldContent.split("\n");
+		const newLines = newContent.split("\n");
 		const revertedLines = [...newLines];
 		let revertCount = 0;
 		let totalNormalizations = 0;
-		
+
 		// Find and revert unwanted normalizations
 		for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
 			const oldLine = oldLines[i];
 			const newLine = newLines[i];
-			
+
 			const oldMatch = oldLine.match(/^(\s*- )\[([^\]]*)\]/);
 			const newMatch = newLine.match(/^(\s*- )\[([^\]]*)\]/);
-			
+
 			if (oldMatch && newMatch) {
 				const oldState = oldMatch[2];
 				const newState = newMatch[2];
-				
+
 				// Check if this is any normalization (not just custom → [x])
 				if (oldState !== newState) {
 					totalNormalizations++;
-					
+
 					// Find which column this line is in
-					let currentColumn = '';
+					let currentColumn = "";
 					for (let j = i; j >= 0; j--) {
-						if (newLines[j].startsWith('## ')) { // Use newLines to get current column structure
+						if (newLines[j].startsWith("## ")) {
+							// Use newLines to get current column structure
 							currentColumn = newLines[j].substring(3).trim();
 							break;
 						}
 					}
-					
+
 					if (currentColumn) {
 						// Get expected state for this column
-						const expectedState = this.getCheckboxStateForColumn(currentColumn);
-						const expectedStateChar = expectedState.replace(/[\[\]]/g, '');
-						
+						const expectedState =
+							this.getCheckboxStateForColumn(currentColumn);
+						const expectedStateChar = expectedState.replace(
+							/[\[\]]/g,
+							""
+						);
+
 						// Revert if:
 						// 1. Old state was correct for this column AND
 						// 2. New state is wrong for this column
-						if (oldState === expectedStateChar && newState !== expectedStateChar) {
+						if (
+							oldState === expectedStateChar &&
+							newState !== expectedStateChar
+						) {
 							// CRITICAL FIX: Only change the checkbox state, preserve the card content
 							const newPrefix = newMatch[1]; // "- " part
-							const newSuffix = newLine.substring(newMatch[0].length); // Everything after checkbox
-							revertedLines[i] = `${newPrefix}[${oldState}]${newSuffix}`;
+							const newSuffix = newLine.substring(
+								newMatch[0].length
+							); // Everything after checkbox
+							revertedLines[
+								i
+							] = `${newPrefix}[${oldState}]${newSuffix}`;
 							revertCount++;
-							
+
 							if (this.settings.showDebugInfo) {
-								console.log(`Reverted line ${i} in column "${currentColumn}": [${newState}] → [${oldState}] (preserving content)`);
+								console.log(
+									`Reverted line ${i} in column "${currentColumn}": [${newState}] → [${oldState}] (preserving content)`
+								);
 							}
 						} else if (this.settings.showDebugInfo) {
-							console.log(`Line ${i} in column "${currentColumn}": [${oldState}] → [${newState}] (not reverting - expected: [${expectedStateChar}])`);
+							console.log(
+								`Line ${i} in column "${currentColumn}": [${oldState}] → [${newState}] (not reverting - expected: [${expectedStateChar}])`
+							);
 						}
 					}
 				}
 			}
 		}
-		
+
 		if (this.settings.showDebugInfo) {
-			console.log(`Reverted ${revertCount} out of ${totalNormalizations} normalizations`);
+			console.log(
+				`Reverted ${revertCount} out of ${totalNormalizations} normalizations`
+			);
 		}
-		
-		return revertedLines.join('\n');
+
+		return revertedLines.join("\n");
 	}
 
 	/**
 	 * Proactively sync all checkbox states in Kanban board to match column mappings
 	 * This ensures all cards have the correct checkbox state for their column
 	 */
-	private async syncAllCheckboxStatesToMappings(kanbanFile: TFile, content: string): Promise<string> {
+	private async syncAllCheckboxStatesToMappings(
+		kanbanFile: TFile,
+		content: string
+	): Promise<string> {
 		try {
 			if (this.settings.showDebugInfo) {
-				console.log(`Syncing all checkbox states to mappings for: ${kanbanFile.path}`);
+				console.log(
+					`Syncing all checkbox states to mappings for: ${kanbanFile.path}`
+				);
 			}
 
 			// Parse Kanban board structure
-			const kanban = await this.parseKanbanBoardContent(content, kanbanFile);
+			const kanban = await this.parseKanbanBoardContent(
+				content,
+				kanbanFile
+			);
 			if (!kanban || Object.keys(kanban).length === 0) {
 				if (this.settings.showDebugInfo) {
-					console.log(`Could not parse Kanban board structure, returning original content`);
+					console.log(
+						`Could not parse Kanban board structure, returning original content`
+					);
 				}
 				return content;
 			}
 
 			// Split content into lines for position-based replacement
-			const lines = content.split('\n');
+			const lines = content.split("\n");
 			let totalChanges = 0;
 
 			// Process each column and sync all cards to have correct checkbox states
 			for (const [columnName, columnData] of Object.entries(kanban)) {
-				const targetCheckboxState = this.getCheckboxStateForColumn(columnName);
+				const targetCheckboxState =
+					this.getCheckboxStateForColumn(columnName);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Syncing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`);
+					console.log(
+						`Syncing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`
+					);
 				}
 
 				// Update each card in this column using position-based replacement
 				for (const item of columnData.items) {
 					// Check if the card already has the correct checkbox state
-					const currentCheckboxMatch = item.text.match(/^(\s*- )\[([^\]]*)\]/);
-					const currentCheckboxState = currentCheckboxMatch ? `[${currentCheckboxMatch[2]}]` : null;
-					
+					const currentCheckboxMatch =
+						item.text.match(/^(\s*- )\[([^\]]*)\]/);
+					const currentCheckboxState = currentCheckboxMatch
+						? `[${currentCheckboxMatch[2]}]`
+						: null;
+
 					// Only update if the current state is different from target state
 					if (currentCheckboxState !== targetCheckboxState) {
-						const updatedCardText = this.updateCheckboxStateInCardText(item.text, targetCheckboxState);
-						
+						const updatedCardText =
+							this.updateCheckboxStateInCardText(
+								item.text,
+								targetCheckboxState
+							);
+
 						if (updatedCardText !== item.text) {
-							const cardPosition = this.findCardPositionInContent(item.text, lines, columnName);
+							const cardPosition = this.findCardPositionInContent(
+								item.text,
+								lines,
+								columnName
+							);
 							if (cardPosition !== -1) {
 								// Replace only the specific card at the found position
-								const cardLines = item.text.split('\n');
-								const updatedCardLines = updatedCardText.split('\n');
-								
+								const cardLines = item.text.split("\n");
+								const updatedCardLines =
+									updatedCardText.split("\n");
+
 								// Replace the card lines at the specific position
-								lines.splice(cardPosition, cardLines.length, ...updatedCardLines);
+								lines.splice(
+									cardPosition,
+									cardLines.length,
+									...updatedCardLines
+								);
 								totalChanges++;
 
 								if (this.settings.showDebugInfo) {
-									console.log(`  Synced card at position ${cardPosition}: ${item.text.substring(0, 30)}... → ${targetCheckboxState} (was ${currentCheckboxState})`);
+									console.log(
+										`  Synced card at position ${cardPosition}: ${item.text.substring(
+											0,
+											30
+										)}... → ${targetCheckboxState} (was ${currentCheckboxState})`
+									);
 								}
 							}
 						}
 					} else {
 						if (this.settings.showDebugInfo) {
-							console.log(`  Skipping card (already has correct state ${targetCheckboxState}): ${item.text.substring(0, 30)}...`);
+							console.log(
+								`  Skipping card (already has correct state ${targetCheckboxState}): ${item.text.substring(
+									0,
+									30
+								)}...`
+							);
 						}
 					}
 				}
 			}
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Sync complete: ${totalChanges} cards updated to match column mappings`);
+				console.log(
+					`Sync complete: ${totalChanges} cards updated to match column mappings`
+				);
 			}
 
-			return lines.join('\n');
-
+			return lines.join("\n");
 		} catch (error) {
 			console.error("Error syncing checkbox states to mappings:", error);
 			if (this.settings.showDebugInfo) {
@@ -2835,18 +3633,24 @@ export default class TaskProgressBarPlugin extends Plugin {
 	 * Runs once per file per session for performance optimization
 	 * Uses position-based replacement to avoid conflicts
 	 */
-	private async autoSyncKanbanCheckboxStates(kanbanFile: TFile): Promise<void> {
+	private async autoSyncKanbanCheckboxStates(
+		kanbanFile: TFile
+	): Promise<void> {
 		try {
 			// Check if we're already updating to prevent conflicts
 			if (this.isUpdatingFromKanban) {
 				if (this.settings.showDebugInfo) {
-					console.log(`Auto-sync skipped - update already in progress for: ${kanbanFile.path}`);
+					console.log(
+						`Auto-sync skipped - update already in progress for: ${kanbanFile.path}`
+					);
 				}
 				return;
 			}
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Starting auto-sync for Kanban board: ${kanbanFile.path}`);
+				console.log(
+					`Starting auto-sync for Kanban board: ${kanbanFile.path}`
+				);
 			}
 
 			// Set flag to prevent conflicts
@@ -2866,49 +3670,81 @@ export default class TaskProgressBarPlugin extends Plugin {
 			const content = await this.app.vault.read(kanbanFile);
 
 			// Parse Kanban board structure
-			const kanban = await this.parseKanbanBoardContent(content, kanbanFile);
+			const kanban = await this.parseKanbanBoardContent(
+				content,
+				kanbanFile
+			);
 
 			// Split content into lines for position-based replacement
-			const lines = content.split('\n');
+			const lines = content.split("\n");
 			let totalChanges = 0;
 
 			// Process each column and update all cards to have correct checkbox states
 			for (const [columnName, columnData] of Object.entries(kanban)) {
-				const targetCheckboxState = this.getCheckboxStateForColumn(columnName);
+				const targetCheckboxState =
+					this.getCheckboxStateForColumn(columnName);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Auto-syncing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`);
+					console.log(
+						`Auto-syncing column "${columnName}" to checkbox state "${targetCheckboxState}" (${columnData.items.length} cards)`
+					);
 				}
 
 				// Update each card in this column using position-based replacement
 				for (const item of columnData.items) {
 					// Check if the card already has the correct checkbox state
-					const currentCheckboxMatch = item.text.match(/^(\s*- )\[([^\]]*)\]/);
-					const currentCheckboxState = currentCheckboxMatch ? `[${currentCheckboxMatch[2]}]` : null;
-					
+					const currentCheckboxMatch =
+						item.text.match(/^(\s*- )\[([^\]]*)\]/);
+					const currentCheckboxState = currentCheckboxMatch
+						? `[${currentCheckboxMatch[2]}]`
+						: null;
+
 					// Only update if the current state is different from target state
 					if (currentCheckboxState !== targetCheckboxState) {
-						const updatedCardText = this.updateCheckboxStateInCardText(item.text, targetCheckboxState);
-						
+						const updatedCardText =
+							this.updateCheckboxStateInCardText(
+								item.text,
+								targetCheckboxState
+							);
+
 						if (updatedCardText !== item.text) {
-							const cardPosition = this.findCardPositionInContent(item.text, lines, columnName);
+							const cardPosition = this.findCardPositionInContent(
+								item.text,
+								lines,
+								columnName
+							);
 							if (cardPosition !== -1) {
 								// Replace only the specific card at the found position
-								const cardLines = item.text.split('\n');
-								const updatedCardLines = updatedCardText.split('\n');
-								
+								const cardLines = item.text.split("\n");
+								const updatedCardLines =
+									updatedCardText.split("\n");
+
 								// Replace the card lines at the specific position
-								lines.splice(cardPosition, cardLines.length, ...updatedCardLines);
+								lines.splice(
+									cardPosition,
+									cardLines.length,
+									...updatedCardLines
+								);
 								totalChanges++;
 
 								if (this.settings.showDebugInfo) {
-									console.log(`  Updated card at position ${cardPosition}: ${item.text.substring(0, 30)}... → ${targetCheckboxState} (was ${currentCheckboxState})`);
+									console.log(
+										`  Updated card at position ${cardPosition}: ${item.text.substring(
+											0,
+											30
+										)}... → ${targetCheckboxState} (was ${currentCheckboxState})`
+									);
 								}
 							}
 						}
 					} else {
 						if (this.settings.showDebugInfo) {
-							console.log(`  Skipping card (already has correct state ${targetCheckboxState}): ${item.text.substring(0, 30)}...`);
+							console.log(
+								`  Skipping card (already has correct state ${targetCheckboxState}): ${item.text.substring(
+									0,
+									30
+								)}...`
+							);
 						}
 					}
 				}
@@ -2916,25 +3752,32 @@ export default class TaskProgressBarPlugin extends Plugin {
 
 			// Update the file if changes were made
 			if (totalChanges > 0) {
-				const updatedContent = lines.join('\n');
+				const updatedContent = lines.join("\n");
 				await this.app.vault.modify(kanbanFile, updatedContent);
 
 				// CRITICAL: Update lastKanbanContent to prevent conflicts with card movement detection
 				this.lastKanbanContent.set(kanbanFile.path, updatedContent);
 
 				if (this.settings.showDebugInfo) {
-					console.log(`Auto-sync complete: ${totalChanges} cards updated in ${kanbanFile.basename}`);
-					console.log(`Updated lastKanbanContent for ${kanbanFile.path} to prevent conflicts`);
+					console.log(
+						`Auto-sync complete: ${totalChanges} cards updated in ${kanbanFile.basename}`
+					);
+					console.log(
+						`Updated lastKanbanContent for ${kanbanFile.path} to prevent conflicts`
+					);
 				}
 
 				// Show notification to user
-				new Notice(`Auto-synced ${totalChanges} card checkbox states in ${kanbanFile.basename}`);
+				new Notice(
+					`Auto-synced ${totalChanges} card checkbox states in ${kanbanFile.basename}`
+				);
 			} else {
 				if (this.settings.showDebugInfo) {
-					console.log(`Auto-sync complete: No changes needed for ${kanbanFile.basename}`);
+					console.log(
+						`Auto-sync complete: No changes needed for ${kanbanFile.basename}`
+					);
 				}
 			}
-
 		} catch (error) {
 			console.error("Error in auto-sync Kanban checkbox states:", error);
 			if (this.settings.showDebugInfo) {
@@ -2960,7 +3803,9 @@ export default class TaskProgressBarPlugin extends Plugin {
 	private async forceRefreshKanbanUI(kanbanFile: TFile): Promise<void> {
 		try {
 			if (this.settings.showDebugInfo) {
-				console.log(`Attempting to force refresh Kanban UI for: ${kanbanFile.path}`);
+				console.log(
+					`Attempting to force refresh Kanban UI for: ${kanbanFile.path}`
+				);
 			}
 
 			// Method 1: Skip MetadataCache trigger to avoid conflicts
@@ -2970,7 +3815,8 @@ export default class TaskProgressBarPlugin extends Plugin {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (activeFile && activeFile.path === kanbanFile.path) {
 				// Try to refresh the active view
-				const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				const activeView =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (activeView) {
 					// Force re-render by triggering a view update
 					setTimeout(() => {
@@ -2998,9 +3844,10 @@ export default class TaskProgressBarPlugin extends Plugin {
 			}
 
 			if (this.settings.showDebugInfo) {
-				console.log(`Force refresh attempts completed for: ${kanbanFile.path}`);
+				console.log(
+					`Force refresh attempts completed for: ${kanbanFile.path}`
+				);
 			}
-
 		} catch (error) {
 			if (this.settings.showDebugInfo) {
 				console.error("Error forcing Kanban UI refresh:", error);
@@ -3039,10 +3886,16 @@ class TaskProgressBarView extends ItemView {
 		this.isVisible = true;
 		this.initialLoadComplete = false;
 
-		// Add custom class to parent workspace-leaf
+		// Add custom class to parent workspace-leaf (using multiple methods for reliability)
 		const leaf = this.leaf as any;
 		if (leaf && leaf.containerEl) {
 			leaf.containerEl.addClass("progress-tracker-leaf");
+		}
+
+		// Also try to add class to parent element directly
+		const parentLeaf = this.containerEl.closest(".workspace-leaf");
+		if (parentLeaf) {
+			parentLeaf.addClass("progress-tracker-leaf");
 		}
 
 		const container = this.containerEl.children[1];
@@ -3058,6 +3911,14 @@ class TaskProgressBarView extends ItemView {
 			text: "Loading task progress...",
 			cls: "loading-indicator",
 		});
+
+		// Trigger initial update after a short delay to ensure workspace is ready
+		setTimeout(async () => {
+			const currentFile = this.plugin.app.workspace.getActiveFile();
+			if (currentFile) {
+				await this.updateProgressBar(currentFile, undefined, true);
+			}
+		}, 200);
 	}
 
 	async updateProgressBar(
@@ -3197,33 +4058,36 @@ class TaskProgressBarView extends ItemView {
 			let incompleteTasks = 0;
 			let completedTasks = 0;
 			let customStateTasks = 0;
-			
+
 			if (this.plugin.settings.enableCustomCheckboxStates) {
 				// When custom checkbox states are enabled, use enhanced counting
 				const taskCounts = this.countTasksByCheckboxState(content);
-				
+
 				// Count standard states
-				incompleteTasks = taskCounts[' '] || 0; // [ ]
-				completedTasks = taskCounts['x'] || 0; // [x]
-				
+				incompleteTasks = taskCounts[" "] || 0; // [ ]
+				completedTasks = taskCounts["x"] || 0; // [x]
+
 				// Count all custom states as tasks in progress
 				for (const [state, count] of Object.entries(taskCounts)) {
-					if (state !== ' ' && state !== 'x' && state.trim() !== '') {
+					if (state !== " " && state !== "x" && state.trim() !== "") {
 						customStateTasks += count;
 					}
 				}
-				
+
 				if (this.plugin.settings.showDebugInfo) {
-					console.log('Custom checkbox state counts:', taskCounts);
-					console.log(`Incomplete: ${incompleteTasks}, Completed: ${completedTasks}, Custom states: ${customStateTasks}`);
+					console.log("Custom checkbox state counts:", taskCounts);
+					console.log(
+						`Incomplete: ${incompleteTasks}, Completed: ${completedTasks}, Custom states: ${customStateTasks}`
+					);
 				}
 			} else {
 				// Legacy counting - only [ ] and [x]
 				incompleteTasks = (content.match(/- \[ \]/g) || []).length;
 				completedTasks = (content.match(/- \[x\]/gi) || []).length;
 			}
-			
-			let totalTasks = incompleteTasks + completedTasks + customStateTasks;
+
+			let totalTasks =
+				incompleteTasks + completedTasks + customStateTasks;
 
 			// Try with relaxed regex if needed (for legacy compatibility)
 			let relaxedIncompleteTasks = 0;
@@ -3264,18 +4128,29 @@ class TaskProgressBarView extends ItemView {
 
 			// Calculate percentage based on which regex found tasks
 			let completedCount =
-				incompleteTasks > 0 || completedTasks > 0 || customStateTasks > 0
+				incompleteTasks > 0 ||
+				completedTasks > 0 ||
+				customStateTasks > 0
 					? completedTasks
 					: relaxedCompletedTasks;
 
 			const percentage = Math.round((completedCount / totalTasks) * 100);
 
 			// Update UI first for better responsiveness
-			this.updateProgressBarUI(container, percentage, completedCount, totalTasks);
+			this.updateProgressBarUI(
+				container,
+				percentage,
+				completedCount,
+				totalTasks
+			);
 
 			// Then process status and Kanban updates asynchronously
-			this.processStatusAndKanbanUpdates(file, percentage, completedCount, totalTasks);
-
+			this.processStatusAndKanbanUpdates(
+				file,
+				percentage,
+				completedCount,
+				totalTasks
+			);
 		} catch (error) {
 			console.error("Error creating progress bar from string:", error);
 			container.empty();
@@ -3441,11 +4316,18 @@ class TaskProgressBarView extends ItemView {
 					this.plugin.settings.autoUpdateKanban &&
 					(statusChanged || !this.completedFilesMap.has(file.path))
 				) {
-					await this.updateKanbanBoards(file, completedCount, totalTasks);
+					await this.updateKanbanBoards(
+						file,
+						completedCount,
+						totalTasks
+					);
 				}
 
 				// Additional special handling for 100% completion
-				if (percentage === 100 && this.plugin.settings.autoUpdateMetadata) {
+				if (
+					percentage === 100 &&
+					this.plugin.settings.autoUpdateMetadata
+				) {
 					// Only update metadata and show notification if this file hasn't been marked as completed yet
 					if (!this.completedFilesMap.has(file.path)) {
 						await this.updateFileMetadata(file);
@@ -3770,7 +4652,9 @@ class TaskProgressBarView extends ItemView {
 				}
 
 				// Read and process the target board
-				const boardContent = await this.plugin.app.vault.read(targetBoard);
+				const boardContent = await this.plugin.app.vault.read(
+					targetBoard
+				);
 
 				// Skip if not a Kanban board or doesn't reference our file
 				if (
@@ -3885,9 +4769,15 @@ class TaskProgressBarView extends ItemView {
 		const obsidianLinks = this.extractObsidianLinks(boardContent);
 		for (const link of obsidianLinks) {
 			const { path, alias } = link;
-			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+			if (
+				path === fileName ||
+				path === filePathWithoutExtension ||
+				path === filePath
+			) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Found exact Obsidian link match for ${fileName}: ${path}`);
+					console.log(
+						`Found exact Obsidian link match for ${fileName}: ${path}`
+					);
 				}
 				return true;
 			}
@@ -3899,14 +4789,19 @@ class TaskProgressBarView extends ItemView {
 			const { text, url } = link;
 			if (url === filePath || url === filePathWithoutExtension) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Found exact Markdown link match for ${fileName}: ${url}`);
+					console.log(
+						`Found exact Markdown link match for ${fileName}: ${url}`
+					);
 				}
 				return true;
 			}
 		}
 
 		// Finally check for exact filepath mentions (with strict boundaries)
-		const filepathPattern = new RegExp(`(?:^|\\s|\\()${this.escapeRegExp(filePath)}(?:$|\\s|\\))`, "i");
+		const filepathPattern = new RegExp(
+			`(?:^|\\s|\\()${this.escapeRegExp(filePath)}(?:$|\\s|\\))`,
+			"i"
+		);
 		if (filepathPattern.test(boardContent)) {
 			if (this.plugin.settings.showDebugInfo) {
 				console.log(`Found exact filepath match for ${filePath}`);
@@ -3921,14 +4816,16 @@ class TaskProgressBarView extends ItemView {
 	 * Extract all Obsidian-style links from content
 	 * Returns array of {path, alias} objects
 	 */
-	private extractObsidianLinks(content: string): Array<{path: string, alias?: string}> {
-		const links: Array<{path: string, alias?: string}> = [];
+	private extractObsidianLinks(
+		content: string
+	): Array<{ path: string; alias?: string }> {
+		const links: Array<{ path: string; alias?: string }> = [];
 		const linkPattern = /\[\[(.*?)\]\]/g;
 		let match;
 
 		while ((match = linkPattern.exec(content)) !== null) {
 			const [_, linkContent] = match;
-			const [path, alias] = linkContent.split("|").map(s => s.trim());
+			const [path, alias] = linkContent.split("|").map((s) => s.trim());
 			links.push({ path, alias });
 		}
 
@@ -3943,8 +4840,10 @@ class TaskProgressBarView extends ItemView {
 	 * Extract all Markdown-style links from content
 	 * Returns array of {text, url} objects
 	 */
-	private extractMarkdownLinks(content: string): Array<{text: string, url: string}> {
-		const links: Array<{text: string, url: string}> = [];
+	private extractMarkdownLinks(
+		content: string
+	): Array<{ text: string; url: string }> {
+		const links: Array<{ text: string; url: string }> = [];
 		const linkPattern = /\[(.*?)\]\((.*?)\)/g;
 		let match;
 
@@ -4052,7 +4951,10 @@ class TaskProgressBarView extends ItemView {
 				}
 
 				// Skip if we're already in target column
-				if (currentColumn.toLowerCase() === targetColumnName.toLowerCase()) {
+				if (
+					currentColumn.toLowerCase() ===
+					targetColumnName.toLowerCase()
+				) {
 					continue;
 				}
 
@@ -4060,14 +4962,16 @@ class TaskProgressBarView extends ItemView {
 				if (line.trim().startsWith("- ")) {
 					// Extract the card content
 					const cardContent = this.getCompleteCardContent(lines, i);
-					
+
 					// Check if this card references our file
-					if (this.isExactCardForFile(cardContent.content, fileToMove)) {
+					if (
+						this.isExactCardForFile(cardContent.content, fileToMove)
+					) {
 						cardStartIndex = i;
 						cardEndIndex = i + cardContent.lineCount - 1;
 						break;
 					}
-					
+
 					// Skip to end of card
 					i += cardContent.lineCount - 1;
 				}
@@ -4077,15 +4981,21 @@ class TaskProgressBarView extends ItemView {
 			if (cardStartIndex !== -1 && cardEndIndex !== -1) {
 				// Extract the card content
 				let cardLines = lines.slice(cardStartIndex, cardEndIndex + 1);
-				
+
 				// Update checkbox states in the card if custom checkbox states are enabled
-				if (this.plugin.settings.enableCustomCheckboxStates && targetColumnName) {
+				if (
+					this.plugin.settings.enableCustomCheckboxStates &&
+					targetColumnName
+				) {
 					const columnName = targetColumnName; // Type assertion for TypeScript
-					cardLines = cardLines.map(line => {
-						return this.updateCheckboxStatesInCard(line, columnName);
+					cardLines = cardLines.map((line) => {
+						return this.updateCheckboxStatesInCard(
+							line,
+							columnName
+						);
 					});
 				}
-				
+
 				// Remove the card from its current position
 				lines.splice(cardStartIndex, cardEndIndex - cardStartIndex + 1);
 
@@ -4108,8 +5018,13 @@ class TaskProgressBarView extends ItemView {
 							`Moved card for ${fileToMove.path} to column "${targetColumnName}" in ${boardFile.path}`
 						);
 						if (this.plugin.settings.enableCustomCheckboxStates) {
-							const targetCheckboxState = this.getCheckboxStateForColumn(targetColumnName);
-							console.log(`Applied checkbox state "${targetCheckboxState}" to card`);
+							const targetCheckboxState =
+								this.getCheckboxStateForColumn(
+									targetColumnName
+								);
+							console.log(
+								`Applied checkbox state "${targetCheckboxState}" to card`
+							);
 						}
 					}
 				}
@@ -4134,21 +5049,28 @@ class TaskProgressBarView extends ItemView {
 	/**
 	 * Get the complete content of a card, including any sub-items
 	 */
-	private getCompleteCardContent(lines: string[], startIndex: number): { content: string, lineCount: number } {
+	private getCompleteCardContent(
+		lines: string[],
+		startIndex: number
+	): { content: string; lineCount: number } {
 		let content = lines[startIndex];
 		let lineCount = 1;
-		
+
 		// Check subsequent lines for sub-items (indented)
 		for (let i = startIndex + 1; i < lines.length; i++) {
 			const line = lines[i];
-			if (line.trim() === "" || line.startsWith("  ") || line.startsWith("\t")) {
+			if (
+				line.trim() === "" ||
+				line.startsWith("  ") ||
+				line.startsWith("\t")
+			) {
 				content += "\n" + line;
 				lineCount++;
 			} else {
 				break;
 			}
 		}
-		
+
 		return { content, lineCount };
 	}
 
@@ -4168,9 +5090,15 @@ class TaskProgressBarView extends ItemView {
 		for (const link of obsidianLinks) {
 			const { path } = link;
 			// Only match if it's an exact match with the full path or filename
-			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+			if (
+				path === fileName ||
+				path === filePathWithoutExtension ||
+				path === filePath
+			) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Found exact Obsidian link match in card: ${path} for file: ${fileName}`);
+					console.log(
+						`Found exact Obsidian link match in card: ${path} for file: ${fileName}`
+					);
 				}
 				return true;
 			}
@@ -4181,7 +5109,9 @@ class TaskProgressBarView extends ItemView {
 			const { url } = link;
 			if (url === filePath || url === filePathWithoutExtension) {
 				if (this.plugin.settings.showDebugInfo) {
-					console.log(`Found exact Markdown link match in card: ${url} for file: ${fileName}`);
+					console.log(
+						`Found exact Markdown link match in card: ${url} for file: ${fileName}`
+					);
 				}
 				return true;
 			}
@@ -4781,10 +5711,11 @@ class TaskProgressBarView extends ItemView {
 
 			// Create card text with link to the file
 			let cardText = `- [[${file.basename}]]\n`;
-			
+
 			// Apply custom checkbox state if enabled
 			if (this.plugin.settings.enableCustomCheckboxStates) {
-				const checkboxState = this.getCheckboxStateForColumn(targetColumnName);
+				const checkboxState =
+					this.getCheckboxStateForColumn(targetColumnName);
 				cardText = `- ${checkboxState} [[${file.basename}]]\n`;
 			}
 
@@ -4821,7 +5752,7 @@ class TaskProgressBarView extends ItemView {
 		}
 
 		const mapping = this.plugin.settings.kanbanColumnCheckboxMappings.find(
-			m => m.columnName.toLowerCase() === columnName.toLowerCase()
+			(m) => m.columnName.toLowerCase() === columnName.toLowerCase()
 		);
 
 		return mapping ? mapping.checkboxState : "[ ]";
@@ -4831,48 +5762,63 @@ class TaskProgressBarView extends ItemView {
 	 * Update checkbox states in card content based on target column
 	 * Only updates the main card checkbox, preserving sub-items and nested checkboxes
 	 */
-	private updateCheckboxStatesInCard(cardContent: string, targetColumnName: string): string {
+	private updateCheckboxStatesInCard(
+		cardContent: string,
+		targetColumnName: string
+	): string {
 		if (!this.plugin.settings.enableCustomCheckboxStates) {
 			return cardContent;
 		}
 
-		const targetCheckboxState = this.getCheckboxStateForColumn(targetColumnName);
-		
+		const targetCheckboxState =
+			this.getCheckboxStateForColumn(targetColumnName);
+
 		// Split content into lines to process only the first line (main card)
-		const lines = cardContent.split('\n');
+		const lines = cardContent.split("\n");
 		if (lines.length === 0) return cardContent;
 
 		// Pattern to match various checkbox states: - [ ], - [x], - [/], - [>], etc.
 		// Remove global flag to only match once per line
 		const checkboxPattern = /^(\s*- )\[[^\]]*\](.*)$/;
-		
+
 		// Only update the first line if it matches the pattern (main card line)
 		if (checkboxPattern.test(lines[0])) {
 			const originalFirstLine = lines[0];
-			lines[0] = lines[0].replace(checkboxPattern, (match, prefix, suffix) => {
-				return `${prefix}${targetCheckboxState}${suffix}`;
-			});
+			lines[0] = lines[0].replace(
+				checkboxPattern,
+				(match, prefix, suffix) => {
+					return `${prefix}${targetCheckboxState}${suffix}`;
+				}
+			);
 
-			if (this.plugin.settings.showDebugInfo && lines[0] !== originalFirstLine) {
-				console.log(`Updated checkbox states in card for column "${targetColumnName}":`, {
-					original: originalFirstLine,
-					updated: lines[0],
-					targetState: targetCheckboxState
-				});
+			if (
+				this.plugin.settings.showDebugInfo &&
+				lines[0] !== originalFirstLine
+			) {
+				console.log(
+					`Updated checkbox states in card for column "${targetColumnName}":`,
+					{
+						original: originalFirstLine,
+						updated: lines[0],
+						targetState: targetCheckboxState,
+					}
+				);
 			}
 		}
 
 		// Join lines back together, preserving sub-items unchanged
-		return lines.join('\n');
+		return lines.join("\n");
 	}
 
 	/**
 	 * Count tasks with different checkbox states
 	 */
-	private countTasksByCheckboxState(content: string): { [state: string]: number } {
+	private countTasksByCheckboxState(content: string): {
+		[state: string]: number;
+	} {
 		const taskCounts: { [state: string]: number } = {};
-		const lines = content.split('\n');
-		
+		const lines = content.split("\n");
+
 		for (const line of lines) {
 			const match = line.trim().match(/^- \[([^\]]*)\]/);
 			if (match) {
@@ -5712,7 +6658,9 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 		// Add new section for custom checkbox states
 		new Setting(containerEl)
 			.setName("Custom Checkbox States")
-			.setDesc("Configure custom checkbox states for different Kanban columns")
+			.setDesc(
+				"Configure custom checkbox states for different Kanban columns"
+			)
 			.setHeading();
 
 		new Setting(containerEl)
@@ -5764,15 +6712,21 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 
 			// NEW: Add setting for Kanban normalization protection
 			new Setting(containerEl)
-				.setName("Protect custom checkbox states from Kanban normalization")
+				.setName(
+					"Protect custom checkbox states from Kanban normalization"
+				)
 				.setDesc(
 					"When enabled, prevents the Kanban plugin from automatically converting custom checkbox states (like [/], [~]) to standard states ([x]). This preserves your custom state mappings."
 				)
 				.addToggle((toggle) =>
 					toggle
-						.setValue(this.plugin.settings.enableKanbanNormalizationProtection)
+						.setValue(
+							this.plugin.settings
+								.enableKanbanNormalizationProtection
+						)
 						.onChange(async (value) => {
-							this.plugin.settings.enableKanbanNormalizationProtection = value;
+							this.plugin.settings.enableKanbanNormalizationProtection =
+								value;
 							await this.plugin.saveSettings();
 						})
 				);
@@ -5800,60 +6754,69 @@ class TaskProgressBarSettingTab extends PluginSettingTab {
 			});
 
 			// Display current mappings
-			this.plugin.settings.kanbanColumnCheckboxMappings.forEach((mapping, index) => {
-				const mappingContainer = containerEl.createDiv({
-					cls: "checkbox-mapping-container",
-					attr: {
-						style: "display: flex; gap: 10px; align-items: center; margin: 10px 0; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 5px;",
-					},
-				});
+			this.plugin.settings.kanbanColumnCheckboxMappings.forEach(
+				(mapping, index) => {
+					const mappingContainer = containerEl.createDiv({
+						cls: "checkbox-mapping-container",
+						attr: {
+							style: "display: flex; gap: 10px; align-items: center; margin: 10px 0; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 5px;",
+						},
+					});
 
-				// Column name input
-				const columnInput = mappingContainer.createEl("input", {
-					type: "text",
-					value: mapping.columnName,
-					attr: {
-						placeholder: "Column Name",
-						style: "flex: 1; padding: 5px;",
-					},
-				});
+					// Column name input
+					const columnInput = mappingContainer.createEl("input", {
+						type: "text",
+						value: mapping.columnName,
+						attr: {
+							placeholder: "Column Name",
+							style: "flex: 1; padding: 5px;",
+						},
+					});
 
-				// Checkbox state input
-				const checkboxInput = mappingContainer.createEl("input", {
-					type: "text",
-					value: mapping.checkboxState,
-					attr: {
-						placeholder: "[ ]",
-						style: "width: 60px; padding: 5px; text-align: center;",
-					},
-				});
+					// Checkbox state input
+					const checkboxInput = mappingContainer.createEl("input", {
+						type: "text",
+						value: mapping.checkboxState,
+						attr: {
+							placeholder: "[ ]",
+							style: "width: 60px; padding: 5px; text-align: center;",
+						},
+					});
 
-				// Delete button
-				const deleteButton = mappingContainer.createEl("button", {
-					text: "Remove",
-					cls: "mod-warning",
-					attr: {
-						style: "padding: 5px 10px;",
-					},
-				});
+					// Delete button
+					const deleteButton = mappingContainer.createEl("button", {
+						text: "Remove",
+						cls: "mod-warning",
+						attr: {
+							style: "padding: 5px 10px;",
+						},
+					});
 
-				// Event listeners
-				columnInput.addEventListener("change", async () => {
-					this.plugin.settings.kanbanColumnCheckboxMappings[index].columnName = columnInput.value;
-					await this.plugin.saveSettings();
-				});
+					// Event listeners
+					columnInput.addEventListener("change", async () => {
+						this.plugin.settings.kanbanColumnCheckboxMappings[
+							index
+						].columnName = columnInput.value;
+						await this.plugin.saveSettings();
+					});
 
-				checkboxInput.addEventListener("change", async () => {
-					this.plugin.settings.kanbanColumnCheckboxMappings[index].checkboxState = checkboxInput.value;
-					await this.plugin.saveSettings();
-				});
+					checkboxInput.addEventListener("change", async () => {
+						this.plugin.settings.kanbanColumnCheckboxMappings[
+							index
+						].checkboxState = checkboxInput.value;
+						await this.plugin.saveSettings();
+					});
 
-				deleteButton.addEventListener("click", async () => {
-					this.plugin.settings.kanbanColumnCheckboxMappings.splice(index, 1);
-					await this.plugin.saveSettings();
-					this.display(); // Refresh the settings panel
-				});
-			});
+					deleteButton.addEventListener("click", async () => {
+						this.plugin.settings.kanbanColumnCheckboxMappings.splice(
+							index,
+							1
+						);
+						await this.plugin.saveSettings();
+						this.display(); // Refresh the settings panel
+					});
+				}
+			);
 
 			// Add new mapping button
 			const addMappingButton = containerEl.createEl("button", {

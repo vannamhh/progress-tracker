@@ -2,6 +2,13 @@
 
 A plugin for Obsidian that helps you track progress of your tasks in real-time. It provides a visual progress bar and integrates with Kanban boards to help you manage your tasks more effectively.
 
+## What's new in the latest update
+
+- **Sidebar duplication bug fixed:** Only one progress tracker view is created, even after reloads.
+- **Sidebar position:** Progress tracker now appears in the right sidebar by default.
+- **Custom checkbox states:** Improved support and protection for custom states in Kanban boards.
+- **View initialization:** Progress bar view now reliably loads and updates when opened.
+
 ## Features
 
 - Real-time progress tracking of tasks in your notes

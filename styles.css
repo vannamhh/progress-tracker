@@ -300,6 +300,11 @@ If your plugin does not need CSS, delete this file.
 
 .workspace-leaf-content[data-type="progress-tracker"] .view-content {
   overflow: hidden;
+  padding-right: 12px;
+}
+
+.workspace-leaf.progress-tracker-leaf, .workspace-leaf:has(.workspace-leaf-content[data-type="progress-tracker"]) {
+  width: 100%;
 }
 
 /* Thông báo Dataview nhỏ gọn */
@@ -347,6 +352,10 @@ If your plugin does not need CSS, delete this file.
 /* Ẩn thanh cuộn khi không cần thiết */
 .workspace-leaf-content[data-type="progress-tracker"] .view-content {
   overflow: hidden;
+}
+
+.workspace-leaf.progress-tracker-leaf, .workspace-leaf:has(.workspace-leaf-content[data-type="progress-tracker"]) {
+  min-width: 100%;
 }
 
 /* Ensure content fits within constrained height */
