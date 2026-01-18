@@ -8,7 +8,7 @@ import {
 import { TaskProgressBarSettings } from "../interfaces/settings";
 import { DataviewApi, KanbanBoard } from "../interfaces/types";
 import { DebugLogger } from "../utils/logger";
-import { escapeRegExp, extractObsidianLinks, extractMarkdownLinks } from "../utils/helpers";
+import { escapeRegExp, extractObsidianLinks, extractMarkdownLinks, removeCodeBlocks } from "../utils/helpers";
 
 /**
  * Progress bar view that displays task completion status in the sidebar
@@ -1539,7 +1539,10 @@ export class TaskProgressBarView extends ItemView {
 	 */
 	private countTasksByCheckboxState(content: string): { [state: string]: number } {
 		const taskCounts: { [state: string]: number } = {};
-		const lines = content.split("\n");
+		
+		// Remove code blocks before counting tasks
+		const contentWithoutCodeBlocks = removeCodeBlocks(content);
+		const lines = contentWithoutCodeBlocks.split("\n");
 
 		for (const line of lines) {
 			const match = line.trim().match(/^- \[([^\]]*)\]/);

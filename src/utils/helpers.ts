@@ -1,4 +1,19 @@
 /**
+ * Remove code blocks from content to avoid counting tasks inside them
+ * @param content - Content with potential code blocks
+ * @returns Content without code blocks
+ */
+export function removeCodeBlocks(content: string): string {
+	// Remove fenced code blocks (```)
+	let result = content.replace(/```[\s\S]*?```/g, '');
+	
+	// Remove inline code blocks (`)
+	result = result.replace(/`[^`\n]+`/g, '');
+	
+	return result;
+}
+
+/**
  * Safely escape regex special characters in a string
  * Used by multiple methods that need to create regex patterns
  * @param string - String to escape
@@ -74,8 +89,10 @@ export function validateContent(
  * @returns true if content contains tasks
  */
 export function hasTasksInContent(content: string): boolean {
+	// Remove code blocks before checking for tasks
+	const contentWithoutCodeBlocks = removeCodeBlocks(content);
 	const extendedTaskRegex = /- \[[^\]]*\]/i;
-	return extendedTaskRegex.test(content);
+	return extendedTaskRegex.test(contentWithoutCodeBlocks);
 }
 
 /**
@@ -87,7 +104,10 @@ export function countTasksByCheckboxState(content: string): {
 	[state: string]: number;
 } {
 	const taskCounts: { [state: string]: number } = {};
-	const lines = content.split("\n");
+	
+	// Remove code blocks before counting tasks
+	const contentWithoutCodeBlocks = removeCodeBlocks(content);
+	const lines = contentWithoutCodeBlocks.split("\n");
 
 	for (const line of lines) {
 		const match = line.trim().match(/^- \[([^\]]*)\]/);
@@ -111,9 +131,13 @@ export function hasTaskContentChanged(
 	oldContent: string,
 	newContent: string
 ): boolean {
+	// Remove code blocks before comparing
+	const oldContentWithoutCodeBlocks = removeCodeBlocks(oldContent);
+	const newContentWithoutCodeBlocks = removeCodeBlocks(newContent);
+	
 	// Split content into lines
-	const oldLines = oldContent.split("\n");
-	const newLines = newContent.split("\n");
+	const oldLines = oldContentWithoutCodeBlocks.split("\n");
+	const newLines = newContentWithoutCodeBlocks.split("\n");
 
 	// Find task lines in both contents - support all checkbox states
 	const oldTasks = oldLines.filter((line) =>

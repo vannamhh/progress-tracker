@@ -469,15 +469,29 @@ export default class TaskProgressBarPlugin extends Plugin {
 	async activateView(): Promise<void> {
 		const { workspace } = this.app;
 
+		// Wait for workspace to be ready
+		if (!workspace.layoutReady) {
+			workspace.onLayoutReady(() => this.activateView());
+			return;
+		}
+
 		let leaf: WorkspaceLeaf | null = null;
 		const leaves = workspace.getLeavesOfType("progress-tracker");
 
 		if (leaves.length > 0) {
 			leaf = leaves[0];
 		} else {
-			leaf = workspace.getRightLeaf(false);
-			if (leaf) {
+			// Try to get right leaf, with fallback
+			const rightLeaf = workspace.getRightLeaf(false);
+			if (rightLeaf) {
+				leaf = rightLeaf;
 				await leaf.setViewState({ type: "progress-tracker", active: true });
+			} else {
+				// Fallback: create a new split in the right sidebar
+				leaf = workspace.getLeaf('split', 'vertical');
+				if (leaf) {
+					await leaf.setViewState({ type: "progress-tracker", active: true });
+				}
 			}
 		}
 
