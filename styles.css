@@ -16,7 +16,8 @@ If your plugin does not need CSS, delete this file.
   max-height: 110px !important;
 } */
 
-
+/* 1. Reset biến toàn cục quy định chiều cao tối thiểu */
+ 
 .task-progress-container {
   padding: 10px;
   margin-bottom: 10px;
@@ -321,7 +322,6 @@ If your plugin does not need CSS, delete this file.
     display: none;
   }
 }
-
 
 /* Điều chỉnh chiều cao tối thiểu của sidebar */
 .workspace-leaf-content[data-type="progress-tracker"] {
