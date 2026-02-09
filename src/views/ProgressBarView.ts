@@ -277,8 +277,10 @@ export class TaskProgressBarView extends ItemView {
 				);
 			} else {
 				// Legacy counting - only [ ] and [x]
-				incompleteTasks = (content.match(/- \[ \]/g) || []).length;
-				completedTasks = (content.match(/- \[x\]/gi) || []).length;
+				// Remove code blocks before counting to avoid counting tasks inside code blocks
+				const contentWithoutCodeBlocks = removeCodeBlocks(content);
+				incompleteTasks = (contentWithoutCodeBlocks.match(/- \[ \]/g) || []).length;
+				completedTasks = (contentWithoutCodeBlocks.match(/- \[x\]/gi) || []).length;
 			}
 
 			let totalTasks = incompleteTasks + completedTasks + customStateTasks;
@@ -287,8 +289,10 @@ export class TaskProgressBarView extends ItemView {
 			let relaxedIncompleteTasks = 0;
 			let relaxedCompletedTasks = 0;
 			if (totalTasks === 0) {
-				relaxedIncompleteTasks = (content.match(/[-*] \[ \]/g) || []).length;
-				relaxedCompletedTasks = (content.match(/[-*] \[x\]/gi) || []).length;
+				// Also remove code blocks when using relaxed regex
+				const contentWithoutCodeBlocks = removeCodeBlocks(content);
+				relaxedIncompleteTasks = (contentWithoutCodeBlocks.match(/[-*] \[ \]/g) || []).length;
+				relaxedCompletedTasks = (contentWithoutCodeBlocks.match(/[-*] \[x\]/gi) || []).length;
 				totalTasks = relaxedIncompleteTasks + relaxedCompletedTasks;
 			}
 
