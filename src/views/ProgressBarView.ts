@@ -157,14 +157,15 @@ export class TaskProgressBarView extends ItemView {
 
 			if (!hasTasksInContent(fileContent)) {
 				this.showNoTasksMessage(container);
-				// CRITICAL: Still process async updates to reset status and Kanban
-				this.logger.log("⚠️ Calling processAsyncUpdates for zero tasks case");
-				const zeroProgressData: ProgressData = {
-					completedCount: 0,
-					totalTasks: 0,
-					percentage: 0,
-				};
-				this.processAsyncUpdates(file, zeroProgressData);
+				// CRITICAL: Still process async updates to reset status and Kanban.
+				// Tính năng này giúp reset lại trạng thái của file khi không có task nào trong file. Nhưng sẽ ghi đè status: seed, sapling, evergreen.
+				// this.logger.log("⚠️ Calling processAsyncUpdates for zero tasks case");
+				// const zeroProgressData: ProgressData = {
+				// 	completedCount: 0,
+				// 	totalTasks: 0,
+				// 	percentage: 0,
+				// };
+				// this.processAsyncUpdates(file, zeroProgressData);
 				this.logger.log("No tasks found in file:", file.path);
 			} else {
 				await this.createProgressBarFromContent(container, fileContent, file);
