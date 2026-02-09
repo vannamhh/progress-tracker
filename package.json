@@ -1,6 +1,6 @@
 {
 	"name": "progress-tracker",
-	"version": "1.5.3",
+	"version": "1.5.4",
 	"description": "Track task completion with a visual progress bar in your sidebar",
 	"main": "main.js",
 	"scripts": {
