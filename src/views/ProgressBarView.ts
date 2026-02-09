@@ -157,6 +157,14 @@ export class TaskProgressBarView extends ItemView {
 
 			if (!hasTasksInContent(fileContent)) {
 				this.showNoTasksMessage(container);
+				// CRITICAL: Still process async updates to reset status and Kanban
+				this.logger.log("⚠️ Calling processAsyncUpdates for zero tasks case");
+				const zeroProgressData: ProgressData = {
+					completedCount: 0,
+					totalTasks: 0,
+					percentage: 0,
+				};
+				this.processAsyncUpdates(file, zeroProgressData);
 				this.logger.log("No tasks found in file:", file.path);
 			} else {
 				await this.createProgressBarFromContent(container, fileContent, file);
@@ -197,8 +205,19 @@ export class TaskProgressBarView extends ItemView {
 			`custom states: ${taskCounts.customStates}, total: ${taskCounts.total}`
 		);
 
+		// Special handling for zero tasks
 		if (taskCounts.total === 0) {
+			this.logger.log(`⚠️ ZERO TASKS detected for ${file.path}`);
 			this.showNoTasksMessage(container);
+			
+			// Still process async updates to reset status and Kanban
+			const zeroProgressData: ProgressData = {
+				completedCount: 0,
+				totalTasks: 0,
+				percentage: 0, // Treat as 0% (Todo)
+			};
+			this.logger.log(`Calling processAsyncUpdates with ZERO data for ${file.path}`);
+			this.processAsyncUpdates(file, zeroProgressData);
 			return;
 		}
 
@@ -369,6 +388,7 @@ export class TaskProgressBarView extends ItemView {
 		setTimeout(async () => {
 			try {
 				const { percentage, completedCount, totalTasks } = data;
+				this.logger.log(`📊 processAsyncUpdates: ${file.basename} - ${completedCount}/${totalTasks} (${percentage}%)`);
 
 				// Calculate target status FIRST
 				let targetStatus = this.settings.statusInProgress;
@@ -377,24 +397,37 @@ export class TaskProgressBarView extends ItemView {
 				} else if (percentage === 100) {
 					targetStatus = this.settings.statusCompleted;
 				}
+				this.logger.log(`🎯 Target status: ${targetStatus}`);
 
 				// Update status based on progress
 				let statusChanged = false;
 				if (this.settings.autoChangeStatus) {
+					this.logger.log(`Updating status based on ${percentage}%...`);
 					statusChanged = await this.updateStatusBasedOnProgress(file, percentage);
+					this.logger.log(`Status changed: ${statusChanged}`);
 					
 					// Wait for metadata cache to update after frontmatter change
 					if (statusChanged) {
 						await new Promise(resolve => setTimeout(resolve, 100));
 					}
+				} else {
+					this.logger.log(`⚠️ autoChangeStatus is DISABLED`);
 				}
 
 				// Update Kanban boards - PASS the calculated status directly
 				// instead of reading from YAML to avoid race condition
+				const hasInMap = this.completedFilesMap.has(file.path);
+				this.logger.log(`Kanban check: statusChanged=${statusChanged}, inCompletedMap=${hasInMap}`);
+				
 				if (this.settings.autoUpdateKanban && this.kanbanService) {
 					if (statusChanged || !this.completedFilesMap.has(file.path)) {
+						this.logger.log(`✅ Calling updateKanbanBoards with status: ${targetStatus}`);
 						await this.updateKanbanBoards(file, completedCount, totalTasks, targetStatus);
+					} else {
+						this.logger.log(`❌ SKIPPING Kanban update (statusChanged=false AND file in completedMap)`);
 					}
+				} else {
+					this.logger.log(`⚠️ Kanban update disabled or no service`);
 				}
 
 				// Handle 100% completion
@@ -495,7 +528,7 @@ export class TaskProgressBarView extends ItemView {
 		totalTasks: number,
 		targetStatus?: string
 	): Promise<void> {
-		if (!this.settings.autoUpdateKanban || totalTasks === 0 || !this.kanbanService) {
+		if (!this.settings.autoUpdateKanban || !this.kanbanService) {
 			return;
 		}
 

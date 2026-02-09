@@ -244,23 +244,18 @@ export default class TaskProgressBarPlugin extends Plugin {
 						}
 
 						// Original logic for regular file changes
-						if (
-							content.includes("- [") ||
-							this.lastFileContent.includes("- [") ||
-							/- \[[^\]]*\]/.test(content) ||
-							/- \[[^\]]*\]/.test(this.lastFileContent)
-						) {
-							const hasContentChanged = this.hasTaskContentChanged(
-								this.lastFileContent,
-								content
-							);
+						// Always check for changes - don't pre-filter by task existence
+						// This ensures updates work even when all tasks are deleted
+						const hasContentChanged = this.hasTaskContentChanged(
+							this.lastFileContent,
+							content
+						);
 
-							if (hasContentChanged) {
-								this.lastFileContent = content;
+						if (hasContentChanged) {
+							this.lastFileContent = content;
 
-								if (currentFile) {
-									this.sidebarView.updateProgressBar(currentFile, content);
-								}
+							if (currentFile) {
+								this.sidebarView.updateProgressBar(currentFile, content);
 							}
 						}
 					}
