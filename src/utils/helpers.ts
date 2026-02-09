@@ -13,6 +13,93 @@ export function removeCodeBlocks(content: string): string {
 	return result;
 }
 
+// ============================================================================
+// Task Counting
+// ============================================================================
+
+/**
+ * Interface for task count results
+ */
+export interface TaskCounts {
+	incomplete: number;
+	completed: number;
+	customStates: number;
+	total: number;
+}
+
+/**
+ * Count all tasks in content with support for custom checkbox states
+ * @param content - Content to parse
+ * @param enableCustomCheckboxStates - Whether to use enhanced counting for custom states
+ * @returns TaskCounts object with breakdown of task states
+ */
+export function countAllTasks(content: string, enableCustomCheckboxStates: boolean): TaskCounts {
+	const contentWithoutCodeBlocks = removeCodeBlocks(content);
+	
+	let incomplete = 0;
+	let completed = 0;
+	let customStates = 0;
+	
+	if (enableCustomCheckboxStates) {
+		// Enhanced counting for custom checkbox states
+		const taskCounts = countTasksByCheckboxState(content);
+		incomplete = taskCounts[" "] || 0;
+		completed = taskCounts["x"] || 0;
+		
+		// Count all custom states
+		for (const [state, count] of Object.entries(taskCounts)) {
+			if (state !== " " && state !== "x" && state.trim() !== "") {
+				customStates += count;
+			}
+		}
+	} else {
+		// Legacy counting - only [ ] and [x]
+		incomplete = (contentWithoutCodeBlocks.match(/- \[ \]/g) || []).length;
+		completed = (contentWithoutCodeBlocks.match(/- \[x\]/gi) || []).length;
+	}
+	
+	let total = incomplete + completed + customStates;
+	
+	// Try relaxed regex if no tasks found
+	if (total === 0) {
+		incomplete = (contentWithoutCodeBlocks.match(/[-*] \[ \]/g) || []).length;
+		completed = (contentWithoutCodeBlocks.match(/[-*] \[x\]/gi) || []).length;
+		total = incomplete + completed;
+	}
+	
+	return { incomplete, completed, customStates, total };
+}
+
+// ============================================================================
+// UI Constants
+// ============================================================================
+
+/**
+ * CSS class names used throughout the plugin UI
+ */
+export const UI_CLASSES = {
+	// Container classes
+	PROGRESS_CONTAINER: "task-progress-container",
+	PROGRESS_LAYOUT: "progress-layout",
+	PROGRESS_BAR_CONTAINER: "pt-progress-bar-container",
+	PROGRESS_ELEMENT: "progress-element",
+	PROGRESS_VALUE: "progress-value",
+	PROGRESS_STATS: "progress-stats-compact",
+	PROGRESS_PERCENTAGE: "progress-percentage-small",
+	
+	// Message classes
+	NO_TASKS_MESSAGE: "no-tasks-message",
+	LOADING_INDICATOR: "loading-indicator",
+	DATAVIEW_WARNING: "dataview-warning-compact",
+	DATAVIEW_WARNING_TEXT: "dataview-warning-text",
+	DEBUG_INFO: "debug-info",
+	
+	// Leaf classes
+	PROGRESS_TRACKER_LEAF: "progress-tracker-leaf",
+} as const;
+
+
+
 /**
  * Safely escape regex special characters in a string
  * Used by multiple methods that need to create regex patterns

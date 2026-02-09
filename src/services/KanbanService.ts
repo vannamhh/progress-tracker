@@ -1514,6 +1514,735 @@ export class KanbanService {
 		this.autoSyncedFiles.clear();
 	}
 
+	// ============================================================================
+	// Kanban Board Management Methods (moved from ProgressBarView)
+	// ============================================================================
+
+	/**
+	 * Check if a Kanban board content contains a reference to the given file
+	 */
+	containsFileReference(boardContent: string, file: TFile): boolean {
+		const filePath = file.path;
+		const filePathWithoutExtension = filePath.replace(/\.md$/, "");
+		const fileName = file.basename;
+
+		// First try to find exact matches in Obsidian-style links
+		const obsidianLinks = extractObsidianLinks(boardContent);
+		for (const link of obsidianLinks) {
+			const { path } = link;
+			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+				this.logger.log(`Found exact Obsidian link match for ${fileName}: ${path}`);
+				return true;
+			}
+		}
+
+		// Then check for Markdown-style links
+		const markdownLinks = extractMarkdownLinks(boardContent);
+		for (const link of markdownLinks) {
+			const { url } = link;
+			if (url === filePath || url === filePathWithoutExtension) {
+				this.logger.log(`Found exact Markdown link match for ${fileName}: ${url}`);
+				return true;
+			}
+		}
+
+		// Finally check for exact filepath mentions
+		const filepathPattern = new RegExp(
+			`(?:^|\\s|\\()${escapeRegExp(filePath)}(?:$|\\s|\\))`,
+			"i"
+		);
+		if (filepathPattern.test(boardContent)) {
+			this.logger.log(`Found exact filepath match for ${filePath}`);
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if a card content exactly matches a file reference
+	 */
+	isExactCardForFile(cardContent: string, file: TFile): boolean {
+		const obsidianLinks = extractObsidianLinks(cardContent);
+		const markdownLinks = extractMarkdownLinks(cardContent);
+
+		const fileName = file.basename;
+		const filePath = file.path;
+		const filePathWithoutExtension = filePath.replace(/\.md$/, "");
+
+		// Check Obsidian links first
+		for (const link of obsidianLinks) {
+			const { path } = link;
+			if (path === fileName || path === filePathWithoutExtension || path === filePath) {
+				return true;
+			}
+		}
+
+		// Then check Markdown links
+		for (const link of markdownLinks) {
+			const { url } = link;
+			if (url === filePath || url === filePathWithoutExtension) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Parse Kanban board structure into columns and items from a file
+	 */
+	async parseKanbanBoardFromFile(file: TFile): Promise<Record<string, { items: Array<{ text: string }> }>> {
+		const kanban: Record<string, { items: Array<{ text: string }> }> = {};
+
+		try {
+			const fileCache = this.app.metadataCache.getFileCache(file);
+			if (!fileCache) {
+				this.logger.log(`No cache found for file: ${file.path}`);
+				return kanban;
+			}
+
+			// Check if this is a Kanban plugin file using frontmatter
+			const isKanbanPlugin = fileCache.frontmatter?.["kanban-plugin"] === "basic";
+
+			// Get H2 headers (level 2) to identify columns
+			const columnHeaders = fileCache.headings?.filter((h) => h.level === 2) || [];
+			if (columnHeaders.length < 1) {
+				this.logger.log(`No H2 headers found in file: ${file.path}`);
+				return kanban;
+			}
+
+			// Read file content only when necessary to extract items
+			const content = await this.app.vault.read(file);
+
+			// Process each column
+			for (let i = 0; i < columnHeaders.length; i++) {
+				const columnHeader = columnHeaders[i];
+				const columnName = columnHeader.heading.trim();
+				kanban[columnName] = { items: [] };
+
+				// Determine column boundaries using header positions
+				const columnStart = columnHeader.position.start.offset;
+				const columnEnd =
+					i < columnHeaders.length - 1
+						? columnHeaders[i + 1].position.start.offset
+						: content.length;
+
+				// Extract column content
+				const columnContent = content
+					.substring(columnStart + columnHeader.heading.length + 4, columnEnd)
+					.trim();
+
+				// Extract items based on format
+				if (isKanbanPlugin) {
+					this.extractKanbanPluginItems(columnContent, kanban[columnName].items);
+				} else {
+					this.extractMarkdownItems(columnContent, kanban[columnName].items);
+				}
+			}
+
+			this.logger.log(`Parsed Kanban board ${file.path} with columns:`, Object.keys(kanban));
+		} catch (error) {
+			this.logger.error(`Error parsing Kanban board ${file.path}:`, error as Error);
+		}
+
+		return kanban;
+	}
+
+	/**
+	 * Extract items from Kanban plugin format
+	 */
+	private extractKanbanPluginItems(columnContent: string, items: Array<{ text: string }>) {
+		const listItemsRaw = columnContent.split(/^- /m).slice(1);
+
+		for (const rawItem of listItemsRaw) {
+			const itemText = "- " + rawItem.trim();
+			items.push({ text: itemText });
+		}
+	}
+
+	/**
+	 * Extract items from regular markdown format
+	 */
+	private extractMarkdownItems(columnContent: string, items: Array<{ text: string }>) {
+		const lines = columnContent.split("\n");
+		let currentItem = "";
+		let inItem = false;
+
+		for (const line of lines) {
+			if (line.trim().startsWith("- ")) {
+				if (inItem) {
+					items.push({ text: currentItem.trim() });
+				}
+				currentItem = line;
+				inItem = true;
+			} else if (inItem) {
+				currentItem += "\n" + line;
+			}
+		}
+
+		if (inItem) {
+			items.push({ text: currentItem.trim() });
+		}
+	}
+
+	/**
+	 * Find the closest column name match for a given status
+	 */
+	findClosestColumnName(columnNames: string[], targetStatus: string): string | undefined {
+		const targetLower = targetStatus.toLowerCase();
+
+		// Define common variants of status names
+		const statusVariants: Record<string, string[]> = {
+			todo: ["to do", "todo", "backlog", "new", "not started", "pending", "open", "to-do"],
+			"in progress": ["progress", "doing", "working", "ongoing", "started", "in work", "active", "current", "wip"],
+			completed: ["done", "complete", "finished", "closed", "resolved", "ready", "completed"],
+		};
+
+		// First try exact match (case-insensitive)
+		const exactMatch = columnNames.find((name) => name.toLowerCase() === targetLower);
+		if (exactMatch) return exactMatch;
+
+		// Special handling for common status values
+		if (targetLower === this.settings.statusTodo.toLowerCase()) {
+			for (const colName of columnNames) {
+				const colNameLower = colName.toLowerCase();
+				if (statusVariants["todo"].some((v) => colNameLower.includes(v) || v === colNameLower)) {
+					return colName;
+				}
+			}
+		} else if (targetLower === this.settings.statusInProgress.toLowerCase()) {
+			for (const colName of columnNames) {
+				const colNameLower = colName.toLowerCase();
+				if (statusVariants["in progress"].some((v) => colNameLower.includes(v) || v === colNameLower)) {
+					return colName;
+				}
+			}
+		} else if (targetLower === this.settings.statusCompleted.toLowerCase()) {
+			for (const colName of columnNames) {
+				const colNameLower = colName.toLowerCase();
+				if (statusVariants["completed"].some((v) => colNameLower.includes(v) || v === colNameLower)) {
+					return colName;
+				}
+			}
+		}
+
+		// Then try fuzzy variant matching
+		for (const [status, variants] of Object.entries(statusVariants)) {
+			if (variants.some((v) => targetLower.includes(v) || v.includes(targetLower))) {
+				for (const colName of columnNames) {
+					const colNameLower = colName.toLowerCase();
+					if (variants.some((v) => colNameLower.includes(v) || v.includes(colNameLower))) {
+						return colName;
+					}
+				}
+			}
+		}
+
+		// If there's a direct word match, use that
+		for (const colName of columnNames) {
+			if (colName.toLowerCase() === targetLower) {
+				return colName;
+			}
+		}
+
+		// If no matches are found, try to find any column with a partial match
+		for (const colName of columnNames) {
+			if (
+				colName.toLowerCase().includes(targetLower) ||
+				targetLower.includes(colName.toLowerCase())
+			) {
+				return colName;
+			}
+		}
+
+		// If still no matches, and this is a "Todo" status, return the first column
+		if (targetLower === this.settings.statusTodo.toLowerCase() && columnNames.length > 0) {
+			return columnNames[0];
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Wait for MetadataCache to update for a specific file
+	 */
+	async waitForCacheUpdate(file: TFile, timeoutMs: number = 1000): Promise<void> {
+		return new Promise((resolve) => {
+			const timeout = setTimeout(() => {
+				this.logger.log(`Timeout waiting for cache update for ${file.path}`);
+				resolve();
+			}, timeoutMs);
+
+			const handler = (updatedFile: TFile) => {
+				if (updatedFile.path === file.path) {
+					this.app.metadataCache.off("changed", handler);
+					clearTimeout(timeout);
+					this.logger.log(`Cache updated for ${file.path}`);
+					resolve();
+				}
+			};
+
+			this.app.metadataCache.on("changed", handler);
+		});
+	}
+
+	/**
+	 * Get the status from the file's YAML frontmatter
+	 */
+	async getStatusFromYaml(file: TFile): Promise<string | null> {
+		const fileCache = this.app.metadataCache.getFileCache(file);
+
+		if (!fileCache?.frontmatter) {
+			this.logger.log(`No frontmatter found for file: ${file.path}`);
+			return null;
+		}
+
+		try {
+			const status = fileCache.frontmatter["status"];
+			if (typeof status === "string" && status.trim()) {
+				this.logger.log(`Status found for ${file.path}: ${status}`);
+				return status.trim();
+			}
+
+			this.logger.log(`No valid status in frontmatter for file: ${file.path}`);
+		} catch (error) {
+			this.logger.error(`Error accessing frontmatter for ${file.path}:`, error as Error);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Calculate status based on task progress
+	 */
+	calculateStatusFromProgress(completedTasks: number, totalTasks: number): string {
+		if (totalTasks === 0 || completedTasks === 0) {
+			return this.settings.statusTodo;
+		} else if (completedTasks === totalTasks) {
+			return this.settings.statusCompleted;
+		} else {
+			return this.settings.statusInProgress;
+		}
+	}
+
+	/**
+	 * Get the complete content of a card, including any sub-items
+	 */
+	getCompleteCardContent(lines: string[], startIndex: number): { content: string; lineCount: number } {
+		let content = lines[startIndex];
+		let lineCount = 1;
+
+		// Check subsequent lines for sub-items (indented)
+		for (let i = startIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.trim() === "" || line.startsWith("  ") || line.startsWith("\t")) {
+				content += "\n" + line;
+				lineCount++;
+			} else {
+				break;
+			}
+		}
+
+		return { content, lineCount };
+	}
+
+	/**
+	 * Update checkbox states in card content based on target column
+	 */
+	updateCheckboxStatesInCard(cardContent: string, targetColumnName: string): string {
+		if (!this.settings.enableCustomCheckboxStates) {
+			return cardContent;
+		}
+
+		const targetCheckboxState = this.getCheckboxStateForColumn(targetColumnName);
+
+		// Split content into lines to process only the first line (main card)
+		const lines = cardContent.split("\n");
+		if (lines.length === 0) return cardContent;
+
+		// Pattern to match various checkbox states
+		const checkboxPattern = /^(\s*- )\[[^\]]*\](.*)$/;
+
+		// Only update the first line if it matches the pattern (main card line)
+		if (checkboxPattern.test(lines[0])) {
+			lines[0] = lines[0].replace(
+				checkboxPattern,
+				(match, prefix, suffix) => {
+					return `${prefix}${targetCheckboxState}${suffix}`;
+				}
+			);
+		}
+
+		return lines.join("\n");
+	}
+
+	/**
+	 * Move a card in a Kanban board to the appropriate column based on status
+	 */
+	async moveCardInKanbanBoard(
+		boardFile: TFile,
+		boardContent: string,
+		fileToMove: TFile,
+		targetStatus: string
+	): Promise<string> {
+		try {
+			// Wait for MetadataCache to update
+			await this.waitForCacheUpdate(fileToMove);
+
+			// Parse the Kanban board structure
+			const kanbanColumns = await this.parseKanbanBoardFromFile(boardFile);
+			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
+				this.logger.log(`Could not parse Kanban board structure in ${boardFile.path}`);
+				return boardContent;
+			}
+
+			// Determine the target column name based on settings
+			let targetColumnName: string | undefined;
+
+			if (this.settings.kanbanSyncWithStatus) {
+				// When syncing with status, use exact status name as the column name
+				targetColumnName = Object.keys(kanbanColumns).find(
+					(name) => name.toLowerCase() === targetStatus.toLowerCase()
+				);
+
+				// If the exact status name isn't found, try a fuzzy match
+				if (!targetColumnName) {
+					targetColumnName = this.findClosestColumnName(
+						Object.keys(kanbanColumns),
+						targetStatus
+					);
+				}
+			} else {
+				// Legacy behavior: When not syncing, use the completed column setting
+				if (targetStatus === this.settings.statusCompleted) {
+					targetColumnName = Object.keys(kanbanColumns).find(
+						(name) =>
+							name.toLowerCase() ===
+							this.settings.kanbanCompletedColumn.toLowerCase()
+					);
+				}
+			}
+
+			// If no matching column found, log and return original content
+			if (!targetColumnName) {
+				this.logger.log(
+					`Could not find column for status "${targetStatus}" in Kanban board ${boardFile.path}`
+				);
+				return boardContent;
+			}
+
+			this.logger.log(`Target column for status "${targetStatus}" is "${targetColumnName}"`);
+
+			// Process each column to find and move the card
+			let cardMoved = false;
+			let newContent = boardContent;
+
+			// Split content into lines for more accurate processing
+			const lines = newContent.split("\n");
+			let currentColumn = "";
+			let cardStartIndex = -1;
+			let cardEndIndex = -1;
+
+			// First pass: Find the exact card that references our file
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+
+				// Check for column header
+				if (line.startsWith("## ")) {
+					currentColumn = line.substring(3).trim();
+					continue;
+				}
+
+				// Skip if we're already in target column
+				if (currentColumn.toLowerCase() === targetColumnName.toLowerCase()) {
+					continue;
+				}
+
+				// Check if line is a card (starts with "- ")
+				if (line.trim().startsWith("- ")) {
+					// Extract the card content
+					const cardContent = this.getCompleteCardContent(lines, i);
+
+					// Check if this card references our file
+					if (this.isExactCardForFile(cardContent.content, fileToMove)) {
+						cardStartIndex = i;
+						cardEndIndex = i + cardContent.lineCount - 1;
+						break;
+					}
+
+					// Skip to end of card
+					i += cardContent.lineCount - 1;
+				}
+			}
+
+			// If we found the card, move it
+			if (cardStartIndex !== -1 && cardEndIndex !== -1) {
+				// Extract the card content
+				let cardLines = lines.slice(cardStartIndex, cardEndIndex + 1);
+
+				// Update checkbox states in the card if custom checkbox states are enabled
+				if (this.settings.enableCustomCheckboxStates && targetColumnName) {
+					cardLines = cardLines.map((line) => {
+						return this.updateCheckboxStatesInCard(line, targetColumnName!);
+					});
+				}
+
+				// Remove the card from its current position
+				lines.splice(cardStartIndex, cardEndIndex - cardStartIndex + 1);
+
+				// Find the target column and insert the card
+				let targetInsertIndex = -1;
+				for (let i = 0; i < lines.length; i++) {
+					if (lines[i].startsWith(`## ${targetColumnName}`)) {
+						targetInsertIndex = i + 1;
+						break;
+					}
+				}
+
+				if (targetInsertIndex !== -1) {
+					// Insert the card at the beginning of the target column
+					lines.splice(targetInsertIndex, 0, ...cardLines);
+					cardMoved = true;
+
+					this.logger.log(
+						`Moved card for ${fileToMove.path} to column "${targetColumnName}" in ${boardFile.path}`
+					);
+				}
+			}
+
+			// If card was moved, update the file
+			if (cardMoved) {
+				newContent = lines.join("\n");
+				await this.app.vault.modify(boardFile, newContent);
+			}
+
+			return newContent;
+		} catch (error) {
+			this.logger.error("Error moving card in Kanban board:", error as Error);
+			return boardContent;
+		}
+	}
+
+	/**
+	 * Add a file to the specified Kanban board if it's not already there
+	 */
+	async addFileToKanbanBoard(file: TFile): Promise<boolean> {
+		try {
+			// Skip if auto-add setting is disabled or board path is empty
+			if (!this.settings.autoAddToKanban || !this.settings.autoAddKanbanBoard) {
+				return false;
+			}
+
+			// Skip plugin files and Kanban board files
+			const filePath = file.path.toLowerCase();
+			const configDir = this.app.vault.configDir.toLowerCase();
+			if (
+				filePath.includes(`${configDir}/plugins/progress-tracker`) ||
+				filePath.includes("kanban") ||
+				filePath === this.settings.autoAddKanbanBoard
+			) {
+				this.logger.log(`Skipping plugin or kanban file: ${file.path}`);
+				return false;
+			}
+
+			// Get the Kanban board file
+			const boardPath = this.settings.autoAddKanbanBoard;
+			const kanbanFile = this.app.vault.getAbstractFileByPath(boardPath);
+
+			if (!kanbanFile || !(kanbanFile instanceof TFile)) {
+				this.logger.log(`Could not find Kanban board at path: ${boardPath}`);
+				return false;
+			}
+
+			// Skip if trying to add the kanban board to itself
+			if (file.path === kanbanFile.path) {
+				this.logger.log(`Skipping adding kanban board to itself: ${file.path}`);
+				return false;
+			}
+
+			// Read the board content
+			const boardContent = await this.app.vault.read(kanbanFile);
+
+			// Skip if this is not a Kanban board
+			if (!this.isKanbanBoard(kanbanFile)) {
+				this.logger.log(`File at path ${boardPath} is not a Kanban board`);
+				return false;
+			}
+
+			// Check if the file is already referenced in the board
+			if (this.containsFileReference(boardContent, file)) {
+				this.logger.log(`File ${file.path} is already in Kanban board ${boardPath}`);
+				return false;
+			}
+
+			// Get the target column name
+			const targetColumn = this.settings.autoAddKanbanColumn || "Todo";
+
+			// Wait for MetadataCache to update
+			await this.waitForCacheUpdate(file);
+
+			// Parse the Kanban board to find the column
+			const kanbanColumns = await this.parseKanbanBoardFromFile(kanbanFile);
+			if (!kanbanColumns || Object.keys(kanbanColumns).length === 0) {
+				this.logger.log(`Could not parse Kanban board structure in ${boardPath}`);
+				return false;
+			}
+
+			// Find the exact or closest column match
+			let targetColumnName = Object.keys(kanbanColumns).find(
+				(name) => name.toLowerCase() === targetColumn.toLowerCase()
+			);
+
+			if (!targetColumnName) {
+				targetColumnName = this.findClosestColumnName(Object.keys(kanbanColumns), targetColumn);
+			}
+
+			if (!targetColumnName) {
+				this.logger.log(`Could not find column "${targetColumn}" in Kanban board ${boardPath}`);
+				return false;
+			}
+
+			// Find the position to insert the card
+			const columnRegex = new RegExp(`## ${escapeRegExp(targetColumnName)}\\s*\\n`);
+			const columnMatch = boardContent.match(columnRegex);
+
+			if (!columnMatch) {
+				this.logger.log(`Could not find column "${targetColumnName}" in Kanban board content`);
+				return false;
+			}
+
+			const insertPosition = columnMatch.index! + columnMatch[0].length;
+
+			// Create card text with link to the file
+			let cardText = `- [[${file.basename}]]\n`;
+
+			// Apply custom checkbox state if enabled
+			if (this.settings.enableCustomCheckboxStates) {
+				const checkboxState = this.getCheckboxStateForColumn(targetColumnName);
+				cardText = `- ${checkboxState} [[${file.basename}]]\n`;
+			}
+
+			// Insert the card
+			const newContent =
+				boardContent.substring(0, insertPosition) +
+				cardText +
+				boardContent.substring(insertPosition);
+
+			// Update the file
+			await this.app.vault.modify(kanbanFile, newContent);
+
+			// Show notice
+			new Notice(`Added ${file.basename} to "${targetColumnName}" column in ${kanbanFile.basename}`);
+
+			return true;
+		} catch (error) {
+			this.logger.error("Error adding file to Kanban board:", error as Error);
+			return false;
+		}
+	}
+
+	/**
+	 * Process all Kanban boards that might reference the target file
+	 */
+	async processKanbanBoardsForFile(file: TFile, currentStatus: string): Promise<number> {
+		// Skip plugin files and obvious Kanban files
+		const filePath = file.path.toLowerCase();
+		const configDir = this.app.vault.configDir.toLowerCase();
+		if (
+			filePath.includes(`${configDir}/plugins/progress-tracker`) ||
+			filePath.includes("kanban")
+		) {
+			this.logger.log(`Skipping plugin or kanban file for kanban processing: ${file.path}`);
+			return 0;
+		}
+
+		let updatedBoardCount = 0;
+
+		// If there is a target board selected in settings, only process that board
+		if (this.settings.autoAddKanbanBoard) {
+			const targetBoard = this.app.vault.getAbstractFileByPath(
+				this.settings.autoAddKanbanBoard
+			);
+
+			if (targetBoard instanceof TFile) {
+				// Skip if trying to update the target file itself
+				if (targetBoard.path === file.path) {
+					this.logger.log(
+						`Skipping target board as it's the file being updated: ${file.path}`
+					);
+					return 0;
+				}
+
+				// Read and process the target board
+				const boardContent = await this.app.vault.read(targetBoard);
+
+				// Skip if not a Kanban board or doesn't reference our file
+				if (!this.isKanbanBoard(targetBoard) || !this.containsFileReference(boardContent, file)) {
+					this.logger.log(
+						`Target board ${targetBoard.path} is not a valid Kanban board or doesn't reference ${file.path}`
+					);
+					return 0;
+				}
+
+				this.logger.log(`Processing target Kanban board: ${targetBoard.path}`);
+
+				// Update the Kanban board
+				const updatedContent = await this.moveCardInKanbanBoard(
+					targetBoard,
+					boardContent,
+					file,
+					currentStatus
+				);
+
+				// If the board was updated, increment the counter
+				if (updatedContent !== boardContent) {
+					updatedBoardCount++;
+				}
+
+				return updatedBoardCount;
+			} else {
+				this.logger.log(`Target board not found: ${this.settings.autoAddKanbanBoard}`);
+				return 0;
+			}
+		}
+
+		// If no target board is set, search all possible boards
+		this.logger.log(`No target board set, searching all potential Kanban boards...`);
+
+		// Get all markdown files that might be Kanban boards
+		const markdownFiles = this.app.vault.getMarkdownFiles();
+
+		// Check each potential Kanban board file
+		for (const boardFile of markdownFiles) {
+			// Skip checking the current file itself
+			if (boardFile.path === file.path) continue;
+
+			// Read the content of the potential Kanban board
+			const boardContent = await this.app.vault.read(boardFile);
+
+			// Skip if not a Kanban board or doesn't reference our file
+			if (!this.isKanbanBoard(boardFile) || !this.containsFileReference(boardContent, file)) continue;
+
+			this.logger.log(`Found Kanban board "${boardFile.path}" that references "${file.path}"`);
+
+			// Update the Kanban board by moving the card
+			const updatedContent = await this.moveCardInKanbanBoard(
+				boardFile,
+				boardContent,
+				file,
+				currentStatus
+			);
+
+			// If the board was updated, increment the counter
+			if (updatedContent !== boardContent) {
+				updatedBoardCount++;
+			}
+		}
+
+		return updatedBoardCount;
+	}
+
 	/**
 	 * Cleanup resources
 	 */

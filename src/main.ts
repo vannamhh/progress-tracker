@@ -79,12 +79,13 @@ export default class TaskProgressBarPlugin extends Plugin {
 					this.dvAPI
 				);
 				
-				// Set up callbacks for Kanban integration
-				this.sidebarView.setIsKanbanBoardFn((file: TFile) => this.kanbanService.isKanbanBoard(file));
+				// Inject KanbanService for Kanban integration
+				this.sidebarView.setKanbanService(this.kanbanService);
 				
 				return this.sidebarView;
 			}
 		);
+
 
 		// Add icon to the left sidebar
 		this.addRibbonIcon("bar-chart-horizontal", "Progress Tracker", () => {
